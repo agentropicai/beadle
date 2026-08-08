@@ -122,6 +122,16 @@ Not model quality. These:
    Delivery failures land in `.deliver-failures.jsonl` and `./beadle status` surfaces them.
    Your third employee should be the one that watches the other two.
 
+## The employees that ship with it
+
+Three, all runnable before you write a line. Read one, then delete it and write your own.
+
+| employee | needs | shows you |
+|---|---|---|
+| **example-site-watch** | nothing | the gate, and the HARD/SOFT split — why a judge must only be asked what it can answer |
+| **example-pr-nag** | `gh auth status` green | the full outcome loop: claim what you told a human, then check a day later whether they acted |
+| **example-page-watch** | nothing | quarantine — it reads text written by competitors, so it holds no credentials and no shell |
+
 ## Guardrails, on day one
 
 Read `docs/04-guardrails.md` before you point an employee at anything real. The short version:
