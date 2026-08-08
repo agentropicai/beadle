@@ -67,12 +67,18 @@ Show the user the actual output. Then tell them, in plain words:
 - if it tripped on a normal day, that the fix is the threshold, **not the prompt**
 - that it is not finished until it produces nothing on a quiet day
 
-Then print the exact scheduling command for the cadence the mandate implies — for example
-`./beadle schedule <name> <task> --cron "30 9 * * *"` — and tell them to run it themselves once
-the task has been quiet on a quiet day.
+## Then employ it
 
-**Do not install the cron entry.** Do not run `--install`, do not touch `crontab`, do not write a
-systemd unit. Scheduling something to run unattended on someone's machine is a decision they make,
-not a side effect of asking for help — which is the same rule every employee in this repo follows.
+Derive the cadence from the mandate — hourly during working hours for something time-sensitive,
+daily for a digest, weekly for a review. Do not default to every ten minutes.
 
-Do not claim it works because it ran. Say what it did.
+```bash
+./beadle schedule <name> <task> --cron "<expr>"
+```
+
+Run it. It asks for confirmation and then installs the cron entry, so the employee is genuinely
+running when you finish. **Say the cadence you chose and why**, and tell them the one command to
+stop it (`./beadle unschedule <name> <task>`) and that `./beadle status` now shows the schedule.
+
+Do not claim it works because it ran. Say what it did, and say plainly that the thresholds are
+guesses that the first week of real output will correct.

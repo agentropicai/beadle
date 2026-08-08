@@ -80,10 +80,11 @@ A new task is not finished when it produces output. It is finished when it produ
 a normal day. Run it by hand until that is true, then schedule it:
 
 ```bash
-./beadle schedule <employee> <task> --cron "30 9 * * *"             # prints the line
-./beadle schedule <employee> <task> --cron "30 9 * * *" --install   # adds it, after confirming
+./beadle schedule <employee> <task> --cron "30 9 * * *"   # installs it, after confirming
+./beadle unschedule <employee> <task>                     # stop it; files untouched
 ```
 
-**Never install a schedule on a user's behalf without being asked.** `--install` edits their
-crontab; it exists so a human can opt in, not so a tool can be helpful. Print the command and let
-them run it.
+`schedule` installs by default — an employee that is not scheduled is not an employee. Derive the
+cadence from the mandate rather than defaulting to every ten minutes, and say which you chose.
+`./beadle status` shows the schedule next to each task, so "is this thing actually employed?" is
+answerable at a glance.

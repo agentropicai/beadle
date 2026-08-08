@@ -5,7 +5,8 @@ beadle — manage the employees in this folder.
     beadle new <name>                  scaffold a new employee from templates/
     beadle run <employee> [task]       run one task, or every task the employee has
     beadle status                      what each employee last did, and whether it is stuck
-    beadle schedule <employee> <task>  print the cron / systemd lines to install it
+    beadle schedule <employee> <task>  put it on a schedule — this is what employs it
+    beadle unschedule <employee> <task>  stop it. Files untouched.
     beadle doctor                      check that the pieces this repo depends on are working
 
 There is deliberately no daemon, no server and no web UI. cron already solved scheduling.
@@ -58,7 +59,7 @@ def cmd_new(args):
     print("  1. Write %semployees/%s/role.md%s. This is a job description, not a prompt." % (BOLD, name, OFF))
     print("  2. Copy templates/task.py into employees/%s/tasks/<task>.py" % name)
     print("  3. Fill in GATHER and the GATE. Run it by hand until the gate is quiet on a normal day.")
-    print("  4. beadle schedule %s <task>" % name)
+    print("  4. ./beadle schedule %s <task> --cron \"30 9 * * *\"   <- this is what employs it" % name)
 
 
 def cmd_run(args):
@@ -102,6 +103,7 @@ def cmd_status(args):
         print("No employees yet. Try: beadle new my-first-employee")
         return
     now = datetime.datetime.now().astimezone()
+    sched = scheduled_map()
     for emp in emps:
         print("\n%s%s%s" % (BOLD, emp, OFF))
         last = _last_journal(emp)
@@ -109,9 +111,11 @@ def cmd_status(args):
         if not ts:
             print("  %s(no tasks)%s" % (DIM, OFF))
         for t in ts:
+            on = sched.get("%s/%s" % (emp, t))
+            tag = ("%s%-13s%s" % (GREEN, on, OFF)) if on else ("%s%-13s%s" % (DIM, "not scheduled", OFF))
             r = last.get(t)
             if not r:
-                print("  %-24s %snever run%s" % (t, DIM, OFF))
+                print("  %-24s %s %snever run%s" % (t, tag, DIM, OFF))
                 continue
             try:
                 age = now - datetime.datetime.fromisoformat(r["ts"])
@@ -119,7 +123,7 @@ def cmd_status(args):
                     else "%dm ago" % (age.total_seconds() // 60)
             except Exception:
                 age_s = "?"
-            print("  %-24s %-10s %s" % (t, age_s, r.get("summary", "")[:90]))
+            print("  %-24s %s %-9s %s" % (t, tag, age_s, r.get("summary", "")[:76]))
         rows, due = lib.claims_due(emp, after_hours=0)
         pending = sum(1 for r in rows if r.get("outcome") is None)
         if rows:
@@ -133,20 +137,21 @@ def cmd_status(args):
 
 
 def cmd_schedule(args):
-    """Print the cron / systemd lines. With --install, add the cron entry after confirmation.
+    """Put a task on a schedule. This is what turns a script into an employee.
 
-    Installing is opt-in and confirmed on purpose. Editing someone's crontab as a side effect of
-    another command is precisely the unannounced irreversible action this whole repo argues
-    against, and doing it here would be hypocritical.
+    Installs by default. An employee that is not scheduled is not an employee, and making people
+    copy-paste a crontab line was a step that bought nothing — it is reversible in one command
+    (`beadle unschedule`), and it is the outcome they explicitly asked for.
+
+    Use --print to see the lines without installing.
     """
     if len(args) < 2:
-        die("usage: beadle schedule <employee> <task> [--cron \"<expr>\"] [--install]")
+        die('usage: beadle schedule <employee> <task> [--cron "<expr>"] [--print] [--yes]')
     emp, task = args[0].strip("/"), args[1]
     path = os.path.join(lib.emp_dir(emp), "tasks", task + ".py")
     if not os.path.exists(path):
         die("no such task: %s/%s" % (emp, task))
 
-    install = "--install" in args
     expr = "*/10 * * * *"
     if "--cron" in args:
         i = args.index("--cron")
@@ -159,13 +164,11 @@ def cmd_schedule(args):
     marker = "# beadle:%s/%s" % (emp, task)
     line = "%s cd %s && %s %s >> %s/logs/cron.log 2>&1  %s" % (expr, BASE, py, path, BASE, marker)
 
-    if install:
-        return _install_cron(emp, task, line, marker)
+    if "--print" not in args:
+        return _install_cron(emp, task, line, marker, expr, assume_yes="--yes" in args)
 
     print("%sCron%s — %s:\n" % (BOLD, OFF, expr))
     print("  " + line + "\n")
-    print("  %sOr let beadle add it for you:%s  ./beadle schedule %s %s --cron \"%s\" --install\n"
-          % (DIM, OFF, emp, task, expr))
     print("%ssystemd%s — /etc/systemd/system/%s.service :\n" % (BOLD, OFF, unit))
     print("""  [Unit]
   Description=beadle %s/%s
@@ -192,36 +195,63 @@ def cmd_schedule(args):
           " skipping a run.%s" % (DIM, OFF))
 
 
-def _install_cron(emp, task, line, marker):
-    """Append one line to the user's crontab, after showing it and asking."""
-    existing = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
-    current = existing.stdout if existing.returncode == 0 else ""
-    if marker in current:
-        print("%sAlready scheduled%s — a crontab entry tagged %s exists:" % (GREEN, OFF, marker))
-        for ln in current.splitlines():
-            if marker in ln:
-                print("  " + ln)
-        print("\nRemove it with `crontab -e` before installing a different schedule.")
-        return
-    print("%sThis will be appended to your crontab:%s\n" % (BOLD, OFF))
-    print("  " + line + "\n")
-    print("%sRemove it later with `crontab -e` — look for %s%s" % (DIM, marker, OFF))
-    try:
-        answer = input("\nAdd it? [y/N] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        print("\naborted")
-        return
-    if answer not in ("y", "yes"):
-        print("aborted — nothing changed")
-        return
-    new = (current.rstrip("\n") + "\n" + line + "\n").lstrip("\n")
-    p = subprocess.run(["crontab", "-"], input=new, text=True, capture_output=True)
+def _crontab():
+    r = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+    return r.stdout if r.returncode == 0 else ""
+
+
+def _write_crontab(text):
+    p = subprocess.run(["crontab", "-"], input=text, text=True, capture_output=True)
     if p.returncode != 0:
         die("crontab failed: " + (p.stderr or "")[:200])
+
+
+def scheduled_map():
+    """{'<emp>/<task>': '<cron expr>'} for everything beadle has installed."""
+    out = {}
+    for ln in _crontab().splitlines():
+        if "# beadle:" not in ln:
+            continue
+        key = ln.split("# beadle:", 1)[1].strip()
+        out[key] = " ".join(ln.split()[:5])
+    return out
+
+
+def _install_cron(emp, task, line, marker, expr, assume_yes=False):
+    current = _crontab()
+    if marker in current:
+        current = "\n".join(l for l in current.splitlines() if marker not in l)
+        print("%sReplacing the existing schedule for %s/%s.%s" % (DIM, emp, task, OFF))
+    elif not assume_yes and sys.stdin.isatty():
+        print("%sScheduling %s/%s — it will run on its own from now on:%s\n" % (BOLD, emp, task, OFF))
+        print("  " + expr + "\n")
+        try:
+            if input("Go ahead? [Y/n] ").strip().lower() in ("n", "no"):
+                print("nothing changed")
+                return
+        except (EOFError, KeyboardInterrupt):
+            print("\nnothing changed")
+            return
+    _write_crontab((current.rstrip("\n") + "\n" + line + "\n").lstrip("\n"))
     os.makedirs(os.path.join(BASE, "logs"), exist_ok=True)
-    print("%sInstalled.%s It will run on that schedule from now on." % (GREEN, OFF))
-    print("Watch the first few: %stail -f %s/logs/cron.log%s" % (DIM, BASE, OFF))
-    print("%sRemember: it is not finished until it says nothing on a quiet day.%s" % (DIM, OFF))
+    print("\n%s%s/%s is now employed.%s  Schedule: %s" % (GREEN, emp, task, OFF, expr))
+    print("  watch it:  %stail -f %s/logs/cron.log%s" % (DIM, BASE, OFF))
+    print("  check in:  %s./beadle status%s" % (DIM, OFF))
+    print("  stop it:   %s./beadle unschedule %s %s%s" % (DIM, emp, task, OFF))
+    print("\n%sIt will be quiet until something happens. That is the point — if it talks on a"
+          " normal day, tune the threshold, not the prompt.%s" % (DIM, OFF))
+
+
+def cmd_unschedule(args):
+    if len(args) < 2:
+        die("usage: beadle unschedule <employee> <task>")
+    emp, task = args[0].strip("/"), args[1]
+    marker = "# beadle:%s/%s" % (emp, task)
+    current = _crontab()
+    if marker not in current:
+        die("%s/%s is not scheduled" % (emp, task))
+    _write_crontab("\n".join(l for l in current.splitlines() if marker not in l).rstrip("\n") + "\n")
+    print("%s%s/%s unscheduled.%s Its files are untouched — reschedule any time." % (GREEN, emp, task, OFF))
 
 
 def cmd_doctor(args):
@@ -256,7 +286,7 @@ def cmd_doctor(args):
 
 
 CMDS = {"new": cmd_new, "run": cmd_run, "status": cmd_status,
-        "schedule": cmd_schedule, "doctor": cmd_doctor}
+        "schedule": cmd_schedule, "unschedule": cmd_unschedule, "doctor": cmd_doctor}
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
