@@ -74,20 +74,28 @@ def why_bad(r):
 
 bad = [(r, why_bad(r)) for r in results]
 bad = [(r, k, w) for r, kw in bad if kw for k, w in [kw]]
-
-if not bad:
-    lib.nothing_to_report(EMP, TASK, "%d site(s) healthy" % len(results))
-
 hard = [b for b in bad if b[1] == "hard"]
+
+# gate() records the decision either way, exits silently when nothing tripped, and occasionally
+# lets a quiet run through to the judge anyway (GATE_SAMPLE) so we can see what we're missing.
+mode = lib.gate(EMP, TASK, tripped=bool(bad),
+                summary="%d site(s) healthy" % len(results) if not bad
+                        else "%d/%d site(s) flagged" % (len(bad), len(results)))
 
 
 # =======================================================================================
 # 3. JUDGE — one call, tools off
 # =======================================================================================
+observed = bad if bad else [(r, "soft", "below threshold: %.2fs (median %s, n=%d)"
+                                        % (r["elapsed"],
+                                           ("%.2fs" % r["median"]) if r["median"] else "none yet",
+                                           r["n"]))
+                            for r in results]
+
 facts = "\n".join("- [%s] %s -> %s (%.2fs, %s bytes; baseline median %s over n=%d)"
                   % (k.upper(), r["url"], w, r["elapsed"], r["bytes"],
                      ("%.2fs" % r["median"]) if r["median"] else "none yet", r["n"])
-                  for r, k, w in bad)
+                  for r, k, w in observed)
 
 prompt = lib.ctx(EMP) + (
     "\n\n=== TASK: uptime-check ===\n"
@@ -119,6 +127,15 @@ run_path = lib.save_run(EMP, TASK, verdict)
 # 4. DELIVER — gated on the verdict
 # =======================================================================================
 first_word = verdict.strip().lstrip("*_# ").upper()
+
+if mode == "sample":
+    # An audit run: the gate said nothing was wrong and we asked anyway. NEVER deliver these —
+    # the point is to find out what the thresholds are hiding, not to route around them. If the
+    # judge keeps saying REAL on sampled runs, your thresholds are too high.
+    lib.done(EMP, TASK, "GATE AUDIT (below threshold, sampled): judge said %s. saved=%s"
+             % (first_word.split()[0][:5] if first_word else "?", run_path), commit=False)
+    sys.exit(0)
+
 if first_word.startswith("NOISE"):
     status = "suppressed-noise"
 else:

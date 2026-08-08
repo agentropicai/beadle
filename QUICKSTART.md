@@ -166,10 +166,11 @@ is a decision about that employee rather than about all of them.
 
 ---
 
-## The five things to remember
+## The six things to remember
 
-1. The model never gathers data and never takes an action. It only judges.
-2. Most runs should end at the gate, silently, having cost nothing.
-3. When it is noisy, tune the SQL — not the prompt.
-4. If the action cannot be undone, the agent does not cross the checkpoint alone.
-5. An employee whose output nobody acts on is a zero. Go and measure that.
+1. Perception is constant and cheap. Cognition is rare and expensive. Do not fuse them.
+2. The model never gathers data and never takes an action. It only judges.
+3. Most runs should end at the gate, silently, having cost nothing.
+4. When it is noisy, tune the SQL — not the prompt.
+5. Silence hides false negatives. Set `GATE_SAMPLE` and read the audit runs monthly.
+6. An employee whose output nobody acts on is a zero. Go and measure that.

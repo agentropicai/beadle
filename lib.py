@@ -476,12 +476,54 @@ def done(emp, task, summary, commit=True):
 
 
 def nothing_to_report(emp, task, summary):
-    """The most important function in this file.
+    """Exit silently, having left a trace. No model invoked, no message sent.
 
-    Call it and exit when the deterministic gate did not trip. No model was invoked, no message
-    was sent, and the run still leaves a trace. A check with nothing to report should cost
-    nothing and say nothing.
+    Prefer gate() below — it does this and also records the decision.
     """
     journal(emp, task, summary)
     log(task, "silent — " + summary)
+    sys.exit(0)
+
+
+def gate(emp, task, tripped, summary):
+    """The most important function in this file. Record the perception decision, then decide
+    whether cognition is warranted.
+
+    Returns "trip"   — the threshold was crossed; go and judge.
+            "sample" — it was NOT crossed, but this run was randomly selected for audit. Judge
+                       anyway, record the verdict, and DO NOT deliver.
+    Exits silently otherwise.
+
+    Why the sampling exists — this is the honest weakness of the whole design. A gate that does
+    not trip produces *silence*, and false negatives are invisible: the model never saw the case,
+    so nothing can tell you what you missed. A model cascade at least emits a cheap auditable
+    answer; a gate emits nothing. So push a small random fraction of below-threshold runs through
+    the judge anyway and read them monthly — that is how you find out what your thresholds are
+    hiding. Set GATE_SAMPLE=0.02 to send 2% of quiet runs for audit.
+
+    Every decision, tripped or not, is appended to <employee>/gate.jsonl, so what was skipped and
+    why stays greppable.
+    """
+    import random
+    rate = 0.0
+    try:
+        rate = float(env("GATE_SAMPLE", "0") or 0)
+    except ValueError:
+        pass
+    sampled = (not tripped) and rate > 0 and random.random() < rate
+
+    rec = {"ts": datetime.datetime.now().astimezone().isoformat(), "task": task,
+           "tripped": bool(tripped), "sampled": bool(sampled), "summary": str(summary)[:300]}
+    try:
+        open(os.path.join(emp_dir(emp), "gate.jsonl"), "a").write(json.dumps(rec) + "\n")
+    except Exception:
+        pass
+
+    if tripped:
+        return "trip"
+    if sampled:
+        log(task, "gate quiet but SAMPLED for audit — " + str(summary))
+        return "sample"
+    journal(emp, task, summary)
+    log(task, "silent — " + str(summary))
     sys.exit(0)

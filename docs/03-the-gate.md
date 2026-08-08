@@ -1,15 +1,25 @@
 # The gate
 
-The eight lines that decide whether your employee is useful or ignored.
+Perception. The lines that decide whether your employee is useful or ignored.
 
 ```python
 interesting = [r for r in rows if <your condition>]
 
-if len(interesting) < MIN_ITEMS:
-    lib.nothing_to_report(EMP, TASK, "nothing crossed the threshold")
+mode = lib.gate(EMP, TASK, tripped=len(interesting) >= MIN_ITEMS,
+                summary="%d of %d crossed the threshold" % (len(interesting), len(rows)))
 ```
 
 That is the gate. It runs before any model call. On a normal day it is where the task ends.
+
+It is not a cost optimisation bolted onto an agent — it is the architecture. **Perception is
+constant and cheap; cognition is rare and expensive; do not fuse them.** The idea long predates
+LLMs: the reflex arc, the Viola–Jones cascade, interrupts over polling. What is new is that the
+expensive system now costs money per thought, which makes the split load-bearing rather than
+merely elegant.
+
+Worth knowing: model *routing* and *cascading* — pick a cheaper model, escalate on low confidence
+— are well named in the literature. A deterministic check that skips the model **entirely** is
+not named anywhere. We call it a **deterministic gate**.
 
 ## Why it exists
 
@@ -77,6 +87,39 @@ a measured fact, already proven by the check; there is nothing for a model to be
 about. Latency-versus-baseline is a comparison, and comparisons are exactly where thin data
 produces confident nonsense. The fix was to label each finding `HARD` or `SOFT` in the prompt
 and tell the judge to treat them differently. See `employees/example-site-watch/tasks/uptime-check.py`.
+
+## The honest weakness: silence hides false negatives
+
+Say this out loud before someone says it to you.
+
+A gate that does not trip produces *silence*. The model never saw the case, so nothing can tell
+you what you missed. And `DELIVER` is silent by default too — two layers of silence stacked. A
+model cascade at least emits a cheap, auditable answer for every input; a gate emits nothing.
+That is a real cost of this design, not a quibble.
+
+Two mitigations. Ship both.
+
+**1. Log every decision.** `lib.gate()` appends to `<employee>/gate.jsonl` whether or not it
+tripped. What was skipped, and why, stays greppable:
+
+```bash
+jq -r 'select(.tripped|not) | .summary' employees/*/gate.jsonl | sort | uniq -c | sort -rn
+```
+
+**2. Sample below-threshold runs through the judge anyway.**
+
+```
+GATE_SAMPLE=0.02      # 2% of quiet runs get judged, and are never delivered
+```
+
+Read the audit runs monthly. If the judge keeps answering REAL on runs your gate called quiet,
+your thresholds are too high and you are missing things. This is the only feedback loop that can
+see a false negative, and it costs 2% of what always-judging would.
+
+**The second critique is real too:** gate rules accumulate. Every false alarm adds a condition,
+and after a year you are maintaining the rules engine you were trying to avoid. Keep thresholds
+few, named at the top of the file, and commented with the specific false alarm that caused them —
+so a future reader can tell which ones have outlived their reason.
 
 ## Calibration ritual
 

@@ -34,17 +34,20 @@ rows = []
 
 
 # =======================================================================================
-# 2. GATE — the most important eight lines in the file.
+# 2. GATE — perception. The most important lines in the file.
 # =======================================================================================
-# Decide *in plain Python* whether anything happened. If nothing did, exit here: no model
-# call, no message, no cost. Most days, most employees should end on this line.
+# Decide *in plain Python* whether anything happened. If nothing did, lib.gate() exits here:
+# no model call, no message, no cost. Most days, most employees should end on this line.
 #
 # When this task turns out to be noisy — and the first version always is — the fix goes
 # HERE, not in the prompt. Tune the SQL before you tune the model.
+#
+# gate() returns "trip" (threshold crossed) or "sample" (it did NOT, but this run was randomly
+# selected for audit — judge it, record it, deliver nothing). Every decision lands in gate.jsonl.
 interesting = [r for r in rows if False]  # <-- your real condition
 
-if len(interesting) < MIN_ITEMS:
-    lib.nothing_to_report(EMP, TASK, "nothing crossed the threshold (%d rows checked)" % len(rows))
+mode = lib.gate(EMP, TASK, tripped=len(interesting) >= MIN_ITEMS,
+                summary="%d of %d rows crossed the threshold" % (len(interesting), len(rows)))
 
 
 # =======================================================================================
@@ -81,6 +84,15 @@ run_path = lib.save_run(EMP, TASK, verdict)
 # 4. DELIVER — gated on the judge's verdict.
 # =======================================================================================
 first_word = verdict.strip().lstrip("*_# ").upper()
+
+if mode == "sample":
+    # Audit run: the gate said nothing happened and we asked anyway, to find out what the
+    # thresholds are hiding. Never deliver these. If the judge keeps saying REAL here, your
+    # thresholds are too high.
+    lib.done(EMP, TASK, "GATE AUDIT (below threshold): judge said %s. saved=%s"
+             % (first_word.split()[0][:5] if first_word else "?", run_path), commit=False)
+    sys.exit(0)
+
 if first_word.startswith("NOISE"):
     status = "suppressed-noise"
 else:

@@ -5,6 +5,7 @@ employees/*/journal.jsonl
 employees/*/claims.jsonl
 employees/*/inbox.jsonl
 employees/*/baseline.json
+employees/*/gate.jsonl
 .deliver-failures.jsonl
 __pycache__/
 *.pyc

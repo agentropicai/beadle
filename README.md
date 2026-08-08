@@ -1,12 +1,15 @@
 # Muster
 
-**Build an AI employee without building an agent platform.**
+**Perception and judgment are different systems with different costs. Build the employee that way.**
 
-An AI employee is a cron job with a job description, a memory file, and a manager. The scary
-part — the agent — is about fifteen lines. Everything that makes it work is boring.
+Most of any job is not thinking — it is *noticing*. Scanning, comparing against a baseline,
+concluding that nothing has changed. Noticing is constant, mechanical, and answerable in SQL.
+Judgment is rare, expensive, and the only part a model is good at.
 
-Muster is the boring part, extracted from a fleet of five employees that have been running a
-real company's operations since mid-2026.
+Almost every agent system fuses the two: a mind wakes up every fifteen minutes to ask whether
+anything happened, and you pay for a thought every time nothing did. Muster keeps them apart.
+
+Extracted from a fleet of five employees running a real company's operations since mid-2026.
 
 ```
 git clone https://github.com/agentropicai/muster && cd muster
@@ -35,10 +38,15 @@ There is no agent loop anywhere in this repo. That is not a limitation we plan t
 
 ## Why it is built this way
 
-The usual design wakes an *agent* on a schedule and lets it decide, in the model, whether there
-was anything to do — which means the deciding costs a model call whether or not anything
-happened. Muster wakes a *check*. Whether anything happened is answered in Python, before any
-model is involved, and the model is invoked at the judgment point and nowhere else.
+The split is not a cost optimisation bolted onto an agent — it is the architecture, and it is
+older than LLMs:
+
+- **The reflex arc.** You do not deliberate about a hot stove. Fast paths exist so the expensive
+  system is never consulted about routine input.
+- **Viola–Jones (2001).** Real-time face detection worked by cascading cheap classifiers that
+  reject most windows before an expensive one runs. Same shape, twenty-five years earlier.
+- **Interrupts over polling.** Most of systems design is moving work off the path that runs
+  constantly.
 
 Measured on the production fleet this was extracted from — 21 live tasks, 5 employees, counted
 2026-08-08:
@@ -60,8 +68,25 @@ Three things follow, and they are the whole argument:
 - **Debuggability.** When a deterministic task misbehaves you read the SQL. There is no
   transcript to reconstruct and no non-determinism to reproduce.
 
-It is thermostat-shaped, not agent-shaped: poll constantly, call the expensive thing only when
-a threshold trips.
+> **Perception is constant and cheap. Cognition is rare and expensive. Don't fuse them.**
+
+### The honest weakness
+
+A gate that does not trip produces *silence*, and false negatives are invisible — the model never
+saw the case, so nothing tells you what was missed. `DELIVER` is silent by default too, so there
+are two layers of silence stacked. A model cascade at least emits a cheap auditable answer; a gate
+emits nothing.
+
+Two mitigations, both built in, and you should use both:
+
+- **`lib.gate()` logs every decision** — what was checked, what tripped, what did not — to
+  `gate.jsonl`. What was skipped, and why, stays greppable.
+- **`GATE_SAMPLE`** sends a small random fraction of below-threshold runs to the judge anyway, so
+  you find out what your thresholds are hiding. Set it to `0.02` and read the results monthly.
+
+The second critique is real too: gate rules accumulate and drift, and if you are careless you end
+up maintaining the rules engine you were avoiding. Keep thresholds few, named, and commented with
+the false alarm that caused them.
 
 ## An employee is a folder
 
