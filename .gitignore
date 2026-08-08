@@ -7,6 +7,7 @@ employees/*/inbox.jsonl
 employees/*/baseline.json
 employees/*/gate.jsonl
 employees/*/snapshots/
+employees/*/seen.json
 .deliver-failures.jsonl
 __pycache__/
 *.pyc

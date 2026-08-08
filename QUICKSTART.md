@@ -5,6 +5,9 @@ Follow this straight through. Budget: **90 minutes** to something running on a s
 You need Python 3.9+ and the [Claude Code CLI](https://claude.com/claude-code), logged in.
 Nothing else — no database, no API key, no Telegram.
 
+Want to see it done before you do it yourself? [EXAMPLE.md](EXAMPLE.md) is a real transcript of
+building one employee end to end, bug included.
+
 ---
 
 ## 0 · Prove the pieces work (3 min)

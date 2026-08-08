@@ -163,7 +163,9 @@ all — the example employee runs with no database, no API key, and no messaging
 
 ## Docs
 
-Start with **[QUICKSTART.md](QUICKSTART.md)** — 90 minutes, clone to scheduled.
+Start with **[EXAMPLE.md](EXAMPLE.md)** — a real transcript of building one employee start to
+finish, including the bug hit on the way. Then **[QUICKSTART.md](QUICKSTART.md)** to do it
+yourself.
 
 | | |
 |---|---|
