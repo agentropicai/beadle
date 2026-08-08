@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How an AI employee actually works — Beadle</title>
+<style>
+  :root{
+    --paper:#F5F1E7; --card:#EFE8D9; --white:#fff; --ink:#1A1A17; --body:#3B3A33;
+    --mid:#4A473D; --muted:#6B675C; --hair:#E4DDCD; --green:#16A34A; --green-d:#0F7A37;
+    --terra:#C4704A; --terra-d:#8C4A2C; --terra-wash:#F3DED2; --sage:#DDF0E2;
+    --amber:#8A6A1A; --deep:#17160F; --on-deep:#F1EDE2; --on-deep-mute:#9A9486;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Avenir Next","Segoe UI",Helvetica,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--body);font-family:var(--sans);
+       font-size:16.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:0 24px 120px}
+  header{background:var(--deep);color:var(--on-deep);padding:64px 0 56px;margin-bottom:56px}
+  header .wrap{padding-bottom:0}
+  .kick{font-family:var(--mono);font-size:12px;letter-spacing:.18em;color:var(--green);
+        text-transform:uppercase;margin:0 0 18px}
+  header h1{font-size:clamp(30px,5vw,46px);line-height:1.12;margin:0 0 18px;font-weight:800;
+            letter-spacing:-.02em}
+  header p{color:var(--on-deep-mute);font-size:18px;max-width:60ch;margin:0}
+  h2{font-size:clamp(22px,3.4vw,29px);line-height:1.2;margin:64px 0 6px;color:var(--ink);
+     font-weight:800;letter-spacing:-.015em}
+  h2 .n{font-family:var(--mono);font-size:14px;color:var(--green);display:block;margin-bottom:8px;
+        letter-spacing:.12em;font-weight:400}
+  h3{font-size:19px;margin:34px 0 8px;color:var(--ink);font-weight:700}
+  p{margin:0 0 16px;max-width:74ch}
+  ul,ol{max-width:74ch;padding-left:22px;margin:0 0 16px}
+  li{margin-bottom:7px}
+  code{font-family:var(--mono);font-size:.88em;background:var(--card);padding:2px 6px;
+       border-radius:4px;color:var(--ink)}
+  pre{background:#121109;color:var(--on-deep);padding:18px 20px;border-radius:8px;
+      overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.65;margin:0 0 20px}
+  pre code{background:none;padding:0;color:inherit;font-size:inherit}
+  pre .c{color:#8B8778}  pre .g{color:#5FD08A}  pre .t{color:#E0956E}  pre .w{color:#fff}
+  .lead{font-size:18.5px;color:var(--mid);max-width:66ch}
+  .rule{height:1px;background:var(--hair);border:0;margin:56px 0}
+  .card{background:var(--white);border-radius:10px;padding:24px 26px;margin:0 0 22px}
+  .card.tint{background:var(--card)}
+  .card h3{margin-top:0}
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));margin-bottom:22px}
+  .note{border-left:3px solid var(--terra);background:var(--terra-wash);padding:16px 20px;
+        border-radius:0 8px 8px 0;margin:0 0 22px}
+  .note strong{color:var(--terra-d)}
+  .note p{margin:0;max-width:none}
+  .good{border-left:3px solid var(--green);background:var(--sage);padding:16px 20px;
+        border-radius:0 8px 8px 0;margin:0 0 22px}
+  .good p{margin:0;max-width:none}
+  table{width:100%;border-collapse:collapse;margin:0 0 22px;font-size:15px}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-weight:700;color:var(--ink);font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+  td:first-child{white-space:nowrap;font-weight:600;color:var(--ink)}
+  .tbl-wrap{overflow-x:auto}
+  .yes{color:var(--green-d);font-weight:700}
+  .no{color:var(--terra-d);font-weight:700}
+  figure{margin:0 0 26px}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:10px;font-style:italic}
+  svg{max-width:100%;height:auto;display:block}
+  .stepnum{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+           border-radius:50%;background:var(--green);color:#fff;font-size:13px;font-weight:700;
+           margin-right:10px;flex:none}
+  .step{display:flex;align-items:flex-start;margin-bottom:22px}
+  .step > div{flex:1}
+  .step h3{margin:2px 0 6px}
+  .files{font-family:var(--mono);font-size:13.5px;line-height:1.9;background:var(--card);
+         padding:20px 22px;border-radius:8px;overflow-x:auto;margin:0 0 22px}
+  .files b{color:var(--ink)}
+  .files span{color:var(--muted)}
+  footer{margin-top:80px;padding-top:24px;border-top:1px solid var(--hair);
+         font-size:14px;color:var(--muted)}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#14130E; --card:#1E1C15; --white:#1A1913; --ink:#F1EDE2; --body:#D8D3C4;
+      --mid:#BDB8A9; --muted:#8F8A7C; --hair:#2B291F; --terra-wash:#33231A; --sage:#17301F;
+      --deep:#0C0B07; --amber:#C9923A; --green-d:#5FD08A; --terra-d:#E09B78;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="kick">Beadle · how it actually works</p>
+    <h1>An AI employee, from nothing<br>to running on its own</h1>
+    <p>One worked example, end to end. What you write, what the machine does, what happens
+       every morning after that — and what it is never allowed to do.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<p class="lead">The employee we'll build is <strong>refund-watch</strong>. Its job: a customer
+files a refund request, and today finance finds out about two days later. We want them to know
+the same morning.</p>
+
+<p>That's it. It is not a chatbot, it doesn't answer questions, and nobody talks to it. It wakes
+up, looks at one thing, and either stays quiet or sends one message.</p>
+
+<hr class="rule">
+
+<!-- ─────────────────────────────────────────────── -->
+<h2><span class="n">01</span>The idea in one picture</h2>
+
+<p>Most of any job is <em>noticing</em>, not thinking. Scanning a list, comparing it to normal,
+concluding nothing has changed. Noticing is constant and mechanical — it's a database query.
+Thinking is rare and expensive, and it's the only part an AI model is actually good at.</p>
+
+<p>Beadle keeps those two apart. Every run does the cheap thing first, and only pays for the
+expensive thing when the cheap thing found something.</p>
+
+<figure>
+<svg viewBox="0 0 880 250" role="img" aria-label="Flow diagram: gather, gate, judge, deliver, record">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#8A8578"/>
+    </marker>
+  </defs>
+  <rect x="8" y="52" width="150" height="66" rx="8" fill="#16A34A"/>
+  <text x="83" y="80" text-anchor="middle" fill="#fff" font-family="var(--sans)" font-size="15" font-weight="700">GATHER</text>
+  <text x="83" y="100" text-anchor="middle" fill="#D6F2E0" font-size="12">one SQL query</text>
+
+  <line x1="162" y1="85" x2="196" y2="85" stroke="#8A8578" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <rect x="200" y="52" width="150" height="66" rx="8" fill="#16A34A"/>
+  <text x="275" y="80" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">GATE</text>
+  <text x="275" y="100" text-anchor="middle" fill="#D6F2E0" font-size="12">anything new?</text>
+
+  <!-- no path -->
+  <path d="M275,122 L275,178" stroke="#8A8578" stroke-width="1.6" marker-end="url(#ar)" fill="none"/>
+  <text x="288" y="150" fill="#6B675C" font-size="12.5">no →</text>
+  <rect x="200" y="182" width="290" height="52" rx="8" fill="#EFE8D9"/>
+  <text x="345" y="204" text-anchor="middle" fill="#1A1A17" font-size="14" font-weight="700">stop. say nothing. cost nothing.</text>
+  <text x="345" y="222" text-anchor="middle" fill="#6B675C" font-size="12">this is most days</text>
+
+  <line x1="354" y1="85" x2="388" y2="85" stroke="#8A8578" stroke-width="1.6" marker-end="url(#ar)"/>
+  <text x="360" y="74" fill="#6B675C" font-size="12.5">yes</text>
+
+  <rect x="392" y="52" width="150" height="66" rx="8" fill="#C4704A"/>
+  <text x="467" y="80" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">JUDGE</text>
+  <text x="467" y="100" text-anchor="middle" fill="#F7DDD0" font-size="12">one AI call</text>
+
+  <line x1="546" y1="85" x2="580" y2="85" stroke="#8A8578" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <rect x="584" y="52" width="140" height="66" rx="8" fill="#16A34A"/>
+  <text x="654" y="80" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">DELIVER</text>
+  <text x="654" y="100" text-anchor="middle" fill="#D6F2E0" font-size="12">one message</text>
+
+  <line x1="728" y1="85" x2="762" y2="85" stroke="#8A8578" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <rect x="766" y="52" width="106" height="66" rx="8" fill="#EFE8D9"/>
+  <text x="819" y="80" text-anchor="middle" fill="#1A1A17" font-size="14" font-weight="700">RECORD</text>
+  <text x="819" y="100" text-anchor="middle" fill="#6B675C" font-size="12">write it down</text>
+
+  <text x="467" y="34" text-anchor="middle" fill="#8C4A2C" font-size="12.5" font-weight="700">the only expensive step</text>
+</svg>
+<figcaption>Every task in Beadle is these five steps. There are no others, and the AI appears
+exactly once — in the middle, on data it did not fetch, producing text that does not act.</figcaption>
+</figure>
+
+<div class="good">
+<p><strong>Why this matters:</strong> the AI is the most expensive and least predictable part of
+the system. Putting it at the judgment point and nowhere else means a quiet day costs nothing, a
+broken day is debuggable (you read the query, not a transcript), and there's no runaway bill to
+police.</p>
+</div>
+
+<hr class="rule">
+
+<!-- ─────────────────────────────────────────────── -->
+<h2><span class="n">02</span>What you actually create</h2>
+
+<p>An employee is a folder. That's the whole thing — no server, no database of its own, no
+dashboard.</p>
+
+<div class="files">
+<b>employees/refund-watch/</b><br>
+&nbsp;&nbsp;<b>role.md</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span>← the job description. You write this. It's the actual work.</span><br>
+&nbsp;&nbsp;<b>tasks/scan.py</b> <span>← the five steps above, in code. ~100 lines, mostly comments.</span><br>
+&nbsp;&nbsp;memory.md &nbsp;&nbsp;&nbsp;<span>← what it has learned. The AI rewrites this itself.</span><br>
+&nbsp;&nbsp;journal.jsonl <span>← one line per run. What it did, every time.</span><br>
+&nbsp;&nbsp;claims.jsonl &nbsp;<span>← what it told a human, and whether they acted.</span><br>
+&nbsp;&nbsp;runs/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span>← the full text of every judgment it ever made.</span>
+</div>
+
+<p>You write the top two. The bottom four write themselves.</p>
+
+<h3>role.md — the job description</h3>
+
+<p>This is not a prompt. Write it the way you'd write one for a person you're hiring and cannot
+supervise minute to minute. Two sections carry the whole file.</p>
+
+<div class="card">
+<h3>The mandate — name the lever, not the topic</h3>
+<p style="color:var(--terra-d)"><strong>✗ Weak:</strong> <em>"Monitor refund requests and report on them."</em></p>
+<p style="margin-bottom:0"><strong style="color:var(--green-d)">✓ Real:</strong> <em>"A refund
+request sits in the table from the moment a customer files it, but finance only finds out when
+someone happens to look — today that's about two days. <strong>The lever is the hours between
+filed and seen, not the number of refunds.</strong> A day where nothing is reported because
+nothing needed deciding is a good day; a ₹40,000 request from Friday surfacing on Wednesday is a
+failure even if the report was beautiful."</em></p>
+</div>
+
+<p>The second version tells the employee what to optimise <em>and</em> what to fear. The first
+tells it nothing it couldn't guess.</p>
+
+<div class="card">
+<h3>Settled decisions — the section nobody writes and everybody needs</h3>
+<p>A scheduled employee will re-propose the same rejected idea every single week, forever, unless
+you close it in writing. This is the list of things you've already decided against:</p>
+<ul style="margin-bottom:0">
+  <li>Refunds under ₹500 are auto-approved and are <em>not</em> news. Don't report them, don't
+      propose reviewing the floor.</li>
+  <li>Weekend filings aren't chased until Monday. Don't propose weekend cover or an on-call rota.</li>
+  <li>A request that's already been decided isn't our business, however large it was.</li>
+  <li>Don't propose process changes, SLA targets or dashboards. Name the refund, the amount, the
+      age. That's the job.</li>
+</ul>
+</div>
+
+<div class="note">
+<p><strong>This is the part an AI cannot write for you.</strong> These are <em>your</em> rejected
+ideas, with <em>your</em> reasons. Everything else in the folder can be generated; this can't.</p>
+</div>
+
+<hr class="rule">
+
+<!-- ─────────────────────────────────────────────── -->
+<h2><span class="n">03</span>Creating it, step by step</h2>
+
+<p>Two routes. The fast one uses Claude Code; the slow one is the same thing by hand, and is
+worth understanding once.</p>
+
+<h3>The fast route</h3>
+
+<pre><code><span class="c"># in the beadle folder</span>
+<span class="w">/hire an employee that tells finance about new refund requests</span></code></pre>
+
+<p>Claude Code then does this, in order:</p>
+
+<div class="step"><span class="stepnum">1</span><div>
+<h3>It stops and asks you four questions</h3>
+<p style="margin-bottom:0">What number moves if this works? · Who receives it and what will they
+do? · What has someone already suggested that you've decided against? · What's the data source,
+and is that credential read-only? <strong>It won't proceed without answers</strong> — these are
+the parts it can't invent.</p>
+</div></div>
+
+<div class="step"><span class="stepnum">2</span><div>
+<h3>It checks your idea against a rubric</h3>
+<p style="margin-bottom:0">Six tests — is this a recurring decision on data you already have? Is
+there a named human who'll act? Is a wrong answer cheap and reversible? If it fails, it says so
+and offers you the safer version instead. Most first ideas score three out of six.</p>
+</div></div>
+
+<div class="step"><span class="stepnum">3</span><div>
+<h3>It writes the two files</h3>
+<p style="margin-bottom:0"><code>role.md</code> from your answers, and <code>tasks/scan.py</code>
+following the five-step shape. It picks starting thresholds and labels them as guesses.</p>
+</div></div>
+
+<div class="step"><span class="stepnum">4</span><div>
+<h3>It runs it once, in front of you</h3>
+<p style="margin-bottom:0">And tells you honestly what happened — including whether the gate
+tripping was <em>correct</em> for today.</p>
+</div></div>
+
+<div class="step"><span class="stepnum">5</span><div>
+<h3>It puts it on a schedule</h3>
+<p style="margin-bottom:0">Cadence derived from the mandate — daily at 09:30 here, not every ten
+minutes. It asks once, then installs it. <strong>The employee is now running.</strong></p>
+</div></div>
+
+<pre><code><span class="g">refund-watch/scan is now employed.</span>  Schedule: 30 9 * * *
+  watch it:  tail -f logs/cron.log
+  check in:  ./beadle status
+  stop it:   ./beadle unschedule refund-watch scan</code></pre>
+
+<h3>The slow route (the same thing, by hand)</h3>
+
+<pre><code><span class="w">./beadle new refund-watch</span>              <span class="c"># 5 seconds — makes the folder</span>
+<span class="c"># ...you write role.md...</span>              <span class="c"># 20 minutes — the real work</span>
+<span class="w">cp templates/task.py employees/refund-watch/tasks/scan.py</span>
+<span class="c"># ...you fill in GATHER and the GATE...</span>  <span class="c"># 25 minutes</span>
+<span class="w">./beadle run refund-watch scan</span>         <span class="c"># run by hand until it says NOTHING</span>
+<span class="w">./beadle schedule refund-watch scan --cron "30 9 * * *"</span></code></pre>
+
+<hr class="rule">
+
+<!-- ─────────────────────────────────────────────── -->
+<h2><span class="n">04</span>What happens every morning after that</h2>
+
+<p>This is the part that's hardest to picture, so here are both days side by side.</p>
+
+<figure>
+<svg viewBox="0 0 880 330" role="img" aria-label="Comparison of a quiet day and an eventful day">
+  <!-- quiet -->
+  <rect x="4" y="8" width="424" height="312" rx="10" fill="#EFE8D9"/>
+  <text x="28" y="42" fill="#1A1A17" font-size="16" font-weight="800">A normal Tuesday</text>
+  <text x="28" y="62" fill="#6B675C" font-size="13">— which is most days —</text>
+
+  <circle cx="36" cy="98" r="5" fill="#16A34A"/>
+  <text x="54" y="94" fill="#1A1A17" font-size="13.5" font-weight="600">09:30  cron wakes the script</text>
+  <text x="54" y="112" fill="#4A473D" font-size="12.5">no AI involved yet</text>
+
+  <circle cx="36" cy="146" r="5" fill="#16A34A"/>
+  <text x="54" y="142" fill="#1A1A17" font-size="13.5" font-weight="600">runs one SQL query</text>
+  <text x="54" y="160" fill="#4A473D" font-size="12.5">3 refunds, all under ₹500, all already seen</text>
+
+  <circle cx="36" cy="194" r="5" fill="#16A34A"/>
+  <text x="54" y="190" fill="#1A1A17" font-size="13.5" font-weight="600">the gate says: nothing new</text>
+  <text x="54" y="208" fill="#4A473D" font-size="12.5">exits here</text>
+
+  <rect x="28" y="228" width="376" height="72" rx="8" fill="#fff"/>
+  <text x="48" y="254" fill="#1A1A17" font-size="13.5" font-weight="700">You hear nothing.</text>
+  <text x="48" y="274" fill="#4A473D" font-size="12.5">No message. No AI call. No cost.</text>
+  <text x="48" y="292" fill="#6B675C" font-size="12">One line added to journal.jsonl, and that's all.</text>
+
+  <!-- eventful -->
+  <rect x="452" y="8" width="424" height="312" rx="10" fill="#F3DED2"/>
+  <text x="476" y="42" fill="#1A1A17" font-size="16" font-weight="800">The Tuesday that matters</text>
+  <text x="476" y="62" fill="#8C4A2C" font-size="13">— maybe twice a month —</text>
+
+  <circle cx="484" cy="98" r="5" fill="#C4704A"/>
+  <text x="502" y="94" fill="#1A1A17" font-size="13.5" font-weight="600">09:30  same script, same query</text>
+
+  <circle cx="484" cy="134" r="5" fill="#C4704A"/>
+  <text x="502" y="130" fill="#1A1A17" font-size="13.5" font-weight="600">gate: 2 new, ₹40,000 and ₹6,200</text>
+  <text x="502" y="148" fill="#4A473D" font-size="12.5">oldest has waited 71 hours</text>
+
+  <circle cx="484" cy="182" r="5" fill="#C4704A"/>
+  <text x="502" y="178" fill="#1A1A17" font-size="13.5" font-weight="600">ONE AI call — the only one</text>
+  <text x="502" y="196" fill="#4A473D" font-size="12.5">reads the rows + the job description + memory</text>
+
+  <rect x="476" y="216" width="376" height="84" rx="8" fill="#fff"/>
+  <text x="496" y="242" fill="#1A1A17" font-size="13.5" font-weight="700">You get one message on Telegram:</text>
+  <text x="496" y="264" fill="#4A473D" font-size="12.5">“Open #4471 first — ₹40,000, filed Friday,</text>
+  <text x="496" y="281" fill="#4A473D" font-size="12.5">71 hours old. One other below it.”</text>
+</svg>
+<figcaption>Same code, same schedule. The difference is entirely decided by a plain
+<code>if</code> statement before any AI is involved.</figcaption>
+</figure>
+
+<h3>What it hands the AI, and what it gets back</h3>
+
+<p>On the day the gate trips, the AI is handed four things and nothing else: the job description,
+its own memory file, the last few journal lines, and the rows. It has <strong>no tools, no
+internet, and one turn</strong>. It cannot look anything up, and it cannot do anything.</p>
+
+<p>It replies with a machine-readable first word so the code can decide whether to send it:</p>
+
+<pre><code><span class="t">REAL</span>
+
+Open #4471 first — ₹40,000, filed Friday 18:40, <span class="w">71 hours old</span>. That's the
+oldest in the queue and the largest. #4482 (₹6,200, 26h) after it.
+
+MEMORY: Friday-evening filings are the ones that age worst — they clear
+the ₹500 floor and then sit through the weekend rule.</code></pre>
+
+<p>If it had answered <code>NOISE</code>, nothing would have been sent. The employee is allowed
+to decide there's nothing worth your morning.</p>
+
+<hr class="rule">
+
+<!-- ─────────────────────────────────────────────── -->
+<h2><span class="n">05</span>What it does — and what it is never allowed to do</h2>
+
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Capability</th><th>Allowed?</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Read the database</td><td class="yes">Yes</td><td>Through a role that <em>cannot write</em>. Enforced by the credential, not by a rule in a file.</td></tr>
+<tr><td>Send you a message</td><td class="yes">Yes</td><td>To its own channel. One employee, one channel, so muting it is a decision about <em>it</em>.</td></tr>
+<tr><td>Draft something for you</td><td class="yes">Yes</td><td>A suggested reply, a proposed change, a summary. Always a draft.</td></tr>
+<tr><td>Write to the database</td><td class="no">Never</td><td>The credential physically can't.</td></tr>
+<tr><td>Approve or reject a refund</td><td class="no">Never</td><td>Irreversible in effect. A human decides.</td></tr>
+<tr><td>Email the customer</td><td class="no">Never</td><td>External send — can't be unsent.</td></tr>
+<tr><td>Merge, deploy, or pay</td><td class="no">Never</td><td>Same rule.</td></tr>
+<tr><td>Follow instructions found in the data</td><td class="no">Never</td><td>A customer's note is <em>data</em>. If it says "ignore your rules", it's ignored.</td></tr>
+<tr><td>Run shell commands</td><td class="no">Never</td><td>The judge has no tools at all. It only produces text.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note">
+<p><strong>The rule that resolves every argument about this:</strong> if an action cannot be
+undone, the employee does not take it — it asks. Note the axis is <em>reversibility</em>, not
+<em>importance</em>. Editing a draft is fine. Sending one customer email is not, and the email is
+the smaller action.</p>
+</div>
+
+<hr class="rule">
+
+<!-- ─────────────────────────────────────────────── -->
+<h2><span class="n">06</span>The schedule</h2>
+
+<p>Scheduling is plain <code>cron</code>. There's no daemon, no background service, and nothing
+to keep alive — the operating system already solved this in 1975.</p>
+
+<pre><code><span class="w">./beadle schedule refund-watch scan --cron "30 9 * * *"</span></code></pre>
+
+<p>That installs one line in your crontab, tagged so Beadle can find it again. Every weekday at
+09:30 the OS runs the script; the script decides in milliseconds whether today is interesting.</p>
+
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Command</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>beadle status</code></td><td>Every employee, its schedule, when it last ran, what it said.</td></tr>
+<tr><td><code>beadle run &lt;emp&gt; &lt;task&gt;</code></td><td>Run it right now, by hand, without waiting for the clock.</td></tr>
+<tr><td><code>beadle unschedule &lt;emp&gt; &lt;task&gt;</code></td><td>Stop it. Files untouched — reschedule any time.</td></tr>
+<tr><td><code>beadle doctor</code></td><td>Are the pieces working at all?</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre><code><span class="w">$ ./beadle status</span>
+
+refund-watch
+  scan          <span class="g">30 9 * * *</span>    2h ago    silent — 3 refunds, none new
+  reconcile     <span class="g">0 18 * * *</span>    14h ago   4 nags: 3 actioned, 1 still open. 75%.</code></pre>
+
+<div class="good">
+<p><strong>Pick the cadence from the mandate.</strong> This one is daily, because finance opens
+the queue once a morning — checking every ten minutes would tell them nothing they could act on
+sooner. A production-monitoring employee runs every ten minutes. A weekly review runs weekly.</p>
+</div>
+
+<hr class="rule">
+
+<!-- ─────────────────────────────────────────────── -->
+<h2><span class="n">07</span>How it gets better — the two loops</h2>
+
+<figure>
+<svg viewBox="0 0 880 240" role="img" aria-label="The memory loop and the outcome loop">
+  <rect x="4" y="20" width="424" height="200" rx="10" fill="#fff"/>
+  <text x="28" y="52" fill="#1A1A17" font-size="16" font-weight="800">Loop 1 — memory</text>
+  <text x="28" y="74" fill="#6B675C" font-size="12.5">so it stops repeating itself</text>
+  <text x="28" y="108" fill="#3B3A33" font-size="13">every run writes a line to <tspan font-family="var(--mono)" font-size="12">journal.jsonl</tspan></text>
+  <text x="28" y="134" fill="#3B3A33" font-size="13">↓</text>
+  <text x="28" y="158" fill="#3B3A33" font-size="13">weekly, the AI rewrites <tspan font-family="var(--mono)" font-size="12">memory.md</tspan> from it</text>
+  <text x="28" y="184" fill="#3B3A33" font-size="13">↓</text>
+  <text x="28" y="206" fill="#1A1A17" font-size="13" font-weight="700">the next run reads that memory first</text>
+
+  <rect x="452" y="20" width="424" height="200" rx="10" fill="#fff"/>
+  <text x="476" y="52" fill="#1A1A17" font-size="16" font-weight="800">Loop 2 — outcomes</text>
+  <text x="476" y="74" fill="#8C4A2C" font-size="12.5">so you find out whether it's worth keeping</text>
+  <text x="476" y="108" fill="#3B3A33" font-size="13">it tells you something → records the claim</text>
+  <text x="476" y="134" fill="#3B3A33" font-size="13">↓</text>
+  <text x="476" y="158" fill="#3B3A33" font-size="13">a day later, a script checks reality:</text>
+  <text x="476" y="178" fill="#3B3A33" font-size="13">did anyone actually act?</text>
+  <text x="476" y="204" fill="#1A1A17" font-size="13" font-weight="700">→ an action rate. The real scorecard.</text>
+</svg>
+<figcaption>The second loop has no AI in it at all. It is a database query, and it is the part
+that tells you whether any of this was worth building.</figcaption>
+</figure>
+
+<p>Loop one is why the hundredth week is better than the first. Every correction you give it —
+"stop flagging these", "this one mattered more" — ends up in <code>memory.md</code>, and the next
+run reads it before doing anything.</p>
+
+<p>Loop two is the one everybody skips and shouldn't. An employee that produces plausible output
+on schedule looks <em>identical</em>, from the outside, to one that's useful. Both run green, both
+send something every morning. You cannot tell which by reading the output — the output is
+persuasive either way. Only going back and checking whether reality changed tells you.</p>
+
+<div class="note">
+<p><strong>How to read the number:</strong> a low action rate means one of two things, and you
+must work out which. Either the flags are noise — go tune the threshold. Or the flags are real
+and <em>your team isn't acting on them</em>. The second is a far more important finding than
+anything the employee was built to report, and you'd never have learned it otherwise.</p>
+</div>
+
+<hr class="rule">
+
+<!-- ─────────────────────────────────────────────── -->
+<h2><span class="n">08</span>The three things that kill one</h2>
+
+<div class="grid">
+<div class="card tint">
+<h3>1 · Noise</h3>
+<p>It fires too often, and after five false alarms nobody reads it. A real one of mine
+false-fired eight days straight — every time on tiny pages swinging by three clicks.</p>
+<p style="margin-bottom:0"><strong>The fix goes in the query, not the prompt.</strong> Three
+constants and a comment fixed it permanently.</p>
+</div>
+<div class="card tint">
+<h3>2 · Nobody acts</h3>
+<p>It works perfectly and changes nothing, and it looks completely healthy while doing so.</p>
+<p style="margin-bottom:0"><strong>Loop two is the only thing that catches this.</strong> An
+employee whose output nobody acts on is worth exactly zero.</p>
+</div>
+<div class="card tint">
+<h3>3 · Silent death</h3>
+<p>A token expires, the tunnel drops, a message fails to send — and nothing tells you. That last
+one hid a broken employee of mine for weeks.</p>
+<p style="margin-bottom:0"><strong>Your third employee should be the one that watches the first
+two.</strong></p>
+</div>
+</div>
+
+<hr class="rule">
+
+<!-- ─────────────────────────────────────────────── -->
+<h2><span class="n">09</span>The whole thing, on a timeline</h2>
+
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>When</th><th>What happens</th><th>Who does it</th></tr></thead>
+<tbody>
+<tr><td>Day 1, 20 min</td><td>Write the job description — the lever and the settled decisions</td><td>You</td></tr>
+<tr><td>Day 1, 10 min</td><td>Test the judgment by hand with pasted data, before any code</td><td>You</td></tr>
+<tr><td>Day 1, 25 min</td><td>Write the task — the query and the threshold</td><td><code>/hire</code>, or you</td></tr>
+<tr><td>Day 1, 10 min</td><td>Run it by hand until it says <em>nothing</em> on a normal day</td><td>You</td></tr>
+<tr><td>Day 1, 1 min</td><td>Schedule it. <strong>It is now employed.</strong></td><td><code>beadle schedule</code></td></tr>
+<tr><td>Days 2–7</td><td>Read every message it sends. This week is where the real thresholds come from.</td><td>You</td></tr>
+<tr><td>Week 2</td><td>Add the reconciler. Find out if anyone acted.</td><td>You</td></tr>
+<tr><td>Week 3+</td><td>Corrections accumulate in memory. It stops repeating itself.</td><td>It</td></tr>
+<tr><td>Only then</td><td>Hire a second one — the shared plumbing makes it faster</td><td>You</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="good">
+<p><strong>An hour of work, and it runs until you stop it.</strong> The time split is the lesson:
+twenty minutes on the job description, twenty-five on code that's mostly comments, ten discovering
+the first version was wrong. Zero on the AI model — there's nothing to tune, because it gets one
+call, no tools, and only the data you hand it.</p>
+</div>
+
+<footer>
+Beadle · <code>~/work/agentropicai/beadle</code> · See <code>EXAMPLE.md</code> for a real
+transcript including the bug hit on the way, and <code>docs/02-choosing-your-first-employee.md</code>
+for the rubric before you pick one.
+</footer>
+
+</div>
+</body>
+</html>
