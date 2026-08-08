@@ -1,0 +1,80 @@
+# Beadle — working rules
+
+Read `EXAMPLE.md` for a worked end-to-end build. This file is the rules for writing employees in
+this repo. Gotchas only — everything derivable from `ls` or from reading `lib.py` is omitted.
+
+## The one rule everything else follows from
+
+**The model never gathers data and never takes an action. It only judges.**
+
+Every task is `GATHER → GATE → JUDGE → DELIVER → RECORD`. There is no agent loop in this repo and
+adding one is not a fix. If you are reaching for tools in the judge step, the task is wrong.
+
+## Writing a task — the mistakes to avoid
+
+These are the failure modes seen repeatedly. Each one produces code that runs and looks fine.
+
+- **Do not put the "did anything happen?" decision in the prompt.** It goes in `lib.gate()`, in
+  plain Python, before any model call. A task whose gate is `tripped=True` is not using the
+  architecture.
+- **Do not ask the judge a question it cannot answer.** Separate hard facts (a 500, a DNS
+  failure, a count) from soft comparisons (slower than baseline, more than usual). Hard facts are
+  already proven — tell the model so, or it will apply small-sample scepticism to a measured fact
+  and suppress a real event. `example-site-watch` labels each finding `HARD` or `SOFT` for exactly
+  this reason.
+- **Force a machine-readable first line** (`REAL`/`NOISE`, `NAG`/`HOLD`, `WORTH`/`SKIP`) so
+  DELIVER can gate on it without parsing prose. And always give the judge an explicit way to say
+  "this is nothing" — a judge that cannot decline is a rubber stamp.
+- **Claim only what you delivered.** `lib.claim()` is a promise to check later whether a human
+  acted. Claiming everything you *saw* rather than everything you *reported* makes the action rate
+  measure background activity instead of this employee's effect.
+- **Persist what you have already reported, for everything that passed the gate** — not just the
+  subset you showed the model. Otherwise the remainder stays permanently "new" and every run
+  re-judges the same backlog. (See the bug in `EXAMPLE.md`.)
+- **Never deliver on a `mode == "sample"` run.** Those are gate audits; they exist to reveal what
+  the thresholds hide, not to route around them.
+- **Always check `lib.failed(verdict)`** before delivering. Never send an `LLM_ERROR:` string to a
+  human, and never swallow it silently — journal it so a fleet-health task can see the employee is
+  broken.
+- **Thresholds go at the top of the file, named, with a comment saying which false alarm caused
+  them.** When the employee is noisy the fix is here, not in the prompt.
+
+## Writing role.md
+
+- The mandate must name **the lever** — the number that moves if this works — not the topic.
+  "Monitor X" is a topic. "Cut the time between a customer complaining and us knowing" is a lever.
+- The `Settled decisions` section is not optional and cannot be invented by an LLM: it is the list
+  of ideas the human has already rejected, with reasons. Without it a scheduled employee
+  re-proposes the same rejected idea every run, forever. Ask the human for it.
+- `Must NOT` is written in the imperative and is specific enough to point at during a review.
+
+## Guardrails that are not negotiable
+
+- **Read-only credentials**, enforced by the credential, not by prose. A rule that must be
+  *prevented* rather than *discouraged* belongs in a permission, not in `role.md`.
+- **Draft-and-approve.** No task publishes, deploys, pays, merges, sends, or messages anyone
+  outside its own channel.
+- **If an action cannot be undone, the employee does not take it.** It asks.
+- **An employee that reads untrusted content holds no credentials and no shell.** Mark such data
+  explicitly as untrusted in the prompt and say so in `role.md`. See `docs/04-guardrails.md`.
+
+## Conventions
+
+- One employee = one folder under `employees/`. Tasks share one role, one memory, one journal.
+- Runtime state (`journal.jsonl`, `claims.jsonl`, `gate.jsonl`, `runs/`, `memory.md`, snapshots,
+  seen-state) is gitignored and written by tasks. Never hand-edit it.
+- Config comes from `.env` via `lib.env()` with a `BEADLE_` prefix. Document any new key in
+  `.env.example`.
+- `lib.git_commit()` is off unless `BEADLE_GIT_COMMIT=1` — on a checkout someone is editing, it
+  would sweep their work into a commit.
+
+## Verify
+
+```bash
+./beadle doctor                     # are the pieces working
+./beadle run <employee> <task>      # run once, by hand
+./beadle status                     # what each employee last did
+```
+
+A new task is not finished when it produces output. It is finished when it produces **nothing** on
+a normal day. Run it by hand until that is true, then schedule it.
