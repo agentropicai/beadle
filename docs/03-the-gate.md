@@ -25,7 +25,7 @@ not named anywhere. We call it a **deterministic gate**.
 
 Two reasons, and the second is the one people underrate.
 
-**Cost.** A check with nothing to report should cost nothing. In the production fleet Muster was
+**Cost.** A check with nothing to report should cost nothing. In the production fleet Beadle was
 extracted from, 10 of 21 tasks never call a model at all, and the busiest — running 144 times a
 day — has never spent a token. That is not an optimisation; it is what happens when you ask
 "did anything change?" in SQL instead of in English.

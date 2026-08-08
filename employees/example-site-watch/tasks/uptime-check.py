@@ -2,7 +2,7 @@
 """
 site-watch — uptime + latency check.
 
-GATHER  fetch each URL in MUSTER_SITES (deterministic; no model).
+GATHER  fetch each URL in BEADLE_SITES (deterministic; no model).
 GATE    a URL is "bad" if it errored, returned >=500, or is SLOW_FACTOR x its own median
         baseline over at least MIN_SAMPLES samples. Nothing bad -> exit before any model call.
 JUDGE   one-shot: REAL or NOISE, given the numbers and the employee's memory.
@@ -26,7 +26,7 @@ BAD_STATUS = 500      # >= this is a server error; 4xx is usually us, not them
 HERE = os.path.dirname(os.path.abspath(__file__))
 BASELINE = os.path.join(os.path.dirname(HERE), "baseline.json")
 
-SITES = [s.strip() for s in lib.env("MUSTER_SITES", "https://example.com").split(",") if s.strip()]
+SITES = [s.strip() for s in lib.env("BEADLE_SITES", "https://example.com").split(",") if s.strip()]
 
 
 # =======================================================================================

@@ -67,7 +67,7 @@ the diagnosis lives.
 **Alert precision** — for employees that claim something is wrong.
 *Of the alerts it sent, how many were still true an hour later?*
 
-The example employee that ships with Muster computes this one, because it is the fastest
+The example employee that ships with Beadle computes this one, because it is the fastest
 feedback you can get on a gate.
 
 ## Reading the number

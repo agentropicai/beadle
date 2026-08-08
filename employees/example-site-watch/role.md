@@ -3,7 +3,7 @@
 ONE employee. Its tasks (`uptime-check`, `reconcile`) SHARE this role, one memory file, and one
 journal. Each task reads recent shared memory and appends what it learned.
 
-This is the worked example that ships with Muster. It needs no database, no API key and no
+This is the worked example that ships with Beadle. It needs no database, no API key and no
 Telegram — it runs the moment you clone the repo. Read it, run it, then delete it and write
 your own; it exists to show the shape, not to be useful to you.
 

@@ -1,5 +1,5 @@
 """
-Muster — the whole harness.
+Beadle — the whole harness.
 
 An employee is a folder. A task is a script. This file is everything the scripts share.
 
@@ -54,7 +54,7 @@ def llm(prompt, model=None, timeout=180):
     MUST check for LLM_ERROR before delivering anything. A task that delivers an error string
     to your team is worse than a task that stays silent.
     """
-    model = model or env("MUSTER_MODEL", "claude-sonnet-4-6")
+    model = model or env("BEADLE_MODEL", "claude-sonnet-4-6")
     try:
         r = subprocess.run(
             ["claude", "-p", "--model", model, "--max-turns", "1", "--tools", ""],
@@ -91,12 +91,12 @@ def failed(text):
 def sql(query_str, dsn=None, sep="\t"):
     """Run a read-only query via psql. Returns a list of rows (each a list of strings).
 
-    Point MUSTER_DSN at a READ-ONLY database role. Not a convention — a credential that
+    Point BEADLE_DSN at a READ-ONLY database role. Not a convention — a credential that
     cannot write is the only version of this that survives contact with a bad week.
     """
-    dsn = dsn or env("MUSTER_DSN")
+    dsn = dsn or env("BEADLE_DSN")
     if not dsn:
-        raise RuntimeError("MUSTER_DSN is not set (see .env.example)")
+        raise RuntimeError("BEADLE_DSN is not set (see .env.example)")
     r = subprocess.run(["psql", dsn, "-tA", "-F", sep, "-c", query_str],
                        capture_output=True, text=True)
     if r.returncode != 0:
@@ -122,7 +122,7 @@ def http_status(url, timeout=20):
     A genuine connection failure (DNS, refused, timeout) returns status 0 with the error set.
     """
     started = datetime.datetime.now()
-    req = urllib.request.Request(url, headers={"User-Agent": "muster/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "beadle/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read()
@@ -202,12 +202,12 @@ def _record_deliverfail(target, detail):
 
 
 def deliver(text, channel=None):
-    """Send a message. Channel defaults to MUSTER_CHANNEL, which defaults to the console.
+    """Send a message. Channel defaults to BEADLE_CHANNEL, which defaults to the console.
 
     Console delivery means the repo works before you have configured anything. Switch to
     telegram/slack once the output is worth reading.
     """
-    channel = channel or env("MUSTER_CHANNEL", "console")
+    channel = channel or env("BEADLE_CHANNEL", "console")
     if channel == "console":
         print(text)
         return "console"
@@ -371,10 +371,10 @@ def git_commit(msg):
 
     OFF by default, and deliberately so: `git add -A` on a repo you are actively editing sweeps
     your half-finished work into a commit as a side effect of running a task. That is a nasty
-    surprise on a laptop. Turn it on with MUSTER_GIT_COMMIT=1 once the employee lives on a box
+    surprise on a laptop. Turn it on with BEADLE_GIT_COMMIT=1 once the employee lives on a box
     where nothing else writes to the checkout.
     """
-    if env("MUSTER_GIT_COMMIT", "0") not in ("1", "true", "yes"):
+    if env("BEADLE_GIT_COMMIT", "0") not in ("1", "true", "yes"):
         return
     if not os.path.isdir(os.path.join(BASE, ".git")):
         return

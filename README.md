@@ -1,4 +1,4 @@
-# Muster
+# Beadle
 
 **Perception and judgment are different systems with different costs. Build the employee that way.**
 
@@ -7,15 +7,15 @@ concluding that nothing has changed. Noticing is constant, mechanical, and answe
 Judgment is rare, expensive, and the only part a model is good at.
 
 Almost every agent system fuses the two: a mind wakes up every fifteen minutes to ask whether
-anything happened, and you pay for a thought every time nothing did. Muster keeps them apart.
+anything happened, and you pay for a thought every time nothing did. Beadle keeps them apart.
 
 Extracted from a fleet of five employees running a real company's operations since mid-2026.
 
 ```
-git clone https://github.com/agentropicai/muster && cd muster
-./muster doctor                              # do the pieces work?
-./muster run example-site-watch uptime-check # a real employee, no config needed
-./muster new my-first-employee               # now write your own
+git clone https://github.com/agentropicai/beadle && cd beadle
+./beadle doctor                              # do the pieces work?
+./beadle run example-site-watch uptime-check # a real employee, no config needed
+./beadle new my-first-employee               # now write your own
 ```
 
 ---
@@ -24,7 +24,7 @@ git clone https://github.com/agentropicai/muster && cd muster
 
 > **The model never gathers data and never takes an action. It only judges.**
 
-Every task in Muster has the same four steps:
+Every task in Beadle has the same four steps:
 
 ```
 1. GATHER   deterministic — SQL, an API call, a shell command. No model.
@@ -63,7 +63,7 @@ Three things follow, and they are the whole argument:
 - **Cost.** A check with nothing to report costs nothing. There is no per-agent budget to
   govern because there is no runaway spend to govern. `llm()` shells out to `claude -p`, so it
   bills against a Claude subscription rather than per-token API credit.
-- **Reliability.** Every model call in a chain is a die roll. Ten steps at 90% is 35%. Muster
+- **Reliability.** Every model call in a chain is a die roll. Ten steps at 90% is 35%. Beadle
   chains are one step long.
 - **Debuggability.** When a deterministic task misbehaves you read the SQL. There is no
   transcript to reconstruct and no non-determinism to reproduce.
@@ -119,7 +119,7 @@ Not model quality. These:
    `reconcile` goes back later and checks reality. That number is the scorecard.
    (`docs/05-the-outcome-loop.md`)
 3. **Silent death.** A token expires, a tunnel drops, a timer crashes, and nothing tells you.
-   Delivery failures land in `.deliver-failures.jsonl` and `./muster status` surfaces them.
+   Delivery failures land in `.deliver-failures.jsonl` and `./beadle status` surfaces them.
    Your third employee should be the one that watches the other two.
 
 ## Guardrails, on day one
@@ -136,11 +136,11 @@ Read `docs/04-guardrails.md` before you point an employee at anything real. The 
 ## Commands
 
 ```
-./muster new <name>                  scaffold an employee from templates/
-./muster run <employee> [task]       run one task, or all of them
-./muster status                      what each employee last did, and whether it is stuck
-./muster schedule <employee> <task>  print the cron / systemd lines
-./muster doctor                      check the pieces
+./beadle new <name>                  scaffold an employee from templates/
+./beadle run <employee> [task]       run one task, or all of them
+./beadle status                      what each employee last did, and whether it is stuck
+./beadle schedule <employee> <task>  print the cron / systemd lines
+./beadle doctor                      check the pieces
 ```
 
 Scheduling is cron or systemd timers. There is no daemon, no server, and no web UI, because

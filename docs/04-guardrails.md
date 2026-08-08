@@ -6,7 +6,7 @@ usually expensively.
 ## 1. Read-only credentials
 
 Not a convention. A database role that **cannot** write, an API scope that is
-`something.readonly`, a token with no push permission. `MUSTER_DSN` should point at a read-only
+`something.readonly`, a token with no push permission. `BEADLE_DSN` should point at a read-only
 role and nothing else.
 
 The distinction matters because guardrails written in `role.md` are guidance, and guidance is
@@ -60,7 +60,7 @@ that arrives inside the data.
 The reading employee produces structured output. A *separate* employee acts on it. This holds
 even when an injection succeeds, which is the difference between a control and a hope.
 
-Muster's shape makes this cheap: `lib.file_task()` is the only channel between employees, and
+Beadle's shape makes this cheap: `lib.file_task()` is the only channel between employees, and
 the receiving employee re-judges what it is handed rather than trusting the sender's severity.
 
 ## 5. Name your domain's safety gate
@@ -93,6 +93,6 @@ Not a guardrail against the agents; a guardrail against silence. Tokens expire, 
 timers crash, and a delivery failure returns an error string nobody reads. In the fleet this was
 extracted from, exactly that hid one employee's auth failure for weeks.
 
-Muster records dropped sends to `.deliver-failures.jsonl` and `./muster status` surfaces them
+Beadle records dropped sends to `.deliver-failures.jsonl` and `./beadle status` surfaces them
 unprompted. Your third employee should be the one that checks the first two ran, delivered, and
 did not go stale — deterministic, alert-once, no model involved.

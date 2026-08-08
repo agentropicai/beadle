@@ -10,8 +10,8 @@ Nothing else — no database, no API key, no Telegram.
 ## 0 · Prove the pieces work (3 min)
 
 ```bash
-git clone https://github.com/agentropicai/muster && cd muster
-./muster doctor
+git clone https://github.com/agentropicai/beadle && cd beadle
+./beadle doctor
 ```
 
 Everything should be `ok` except `.env`, which is optional.
@@ -21,7 +21,7 @@ Everything should be `ok` except `.env`, which is optional.
 ## 1 · Watch a real employee run (7 min)
 
 ```bash
-./muster run example-site-watch uptime-check
+./beadle run example-site-watch uptime-check
 ```
 
 It says one line and exits: `silent — 1 site(s) healthy`. **No model was called.** That is the
@@ -40,8 +40,8 @@ class H(BaseHTTPRequestHandler):
 HTTPServer(('127.0.0.1', 8731), H).serve_forever()" &
 
 cp .env.example .env
-echo 'MUSTER_SITES=http://127.0.0.1:8731/checkout,https://example.com' >> .env
-./muster run example-site-watch uptime-check
+echo 'BEADLE_SITES=http://127.0.0.1:8731/checkout,https://example.com' >> .env
+./beadle run example-site-watch uptime-check
 ```
 
 Now the gate trips, the model is called exactly once, and you get a judgment. Read it — it
@@ -49,7 +49,7 @@ should have picked out the broken URL and ignored the healthy one.
 
 ```bash
 cat employees/example-site-watch/claims.jsonl   # what it told you
-./muster status                                 # what it has been doing
+./beadle status                                 # what it has been doing
 kill %1                                         # stop the broken server
 ```
 
@@ -84,7 +84,7 @@ costs fifteen minutes instead of a fortnight.
 ## 3 · Write the job description (20 min)
 
 ```bash
-./muster new support-watch     # your name here
+./beadle new support-watch     # your name here
 ```
 
 Open `employees/<name>/role.md` and fill it in. This is a job description for someone you cannot
@@ -127,7 +127,7 @@ The part to get right is **the gate** — the plain-Python condition that decide
 happened. Run the task by hand, on a normal day, until it says nothing:
 
 ```bash
-./muster run <name> <task>
+./beadle run <name> <task>
 ```
 
 If it fires on a normal day, tune the thresholds — not the prompt. See
@@ -138,13 +138,13 @@ If it fires on a normal day, tune the thresholds — not the prompt. See
 ## 6 · Schedule it (5 min)
 
 ```bash
-./muster schedule <name> <task>
+./beadle schedule <name> <task>
 ```
 
 Copy the cron line, or install the systemd units it prints. Then set delivery in `.env`:
 
 ```
-MUSTER_CHANNEL=telegram
+BEADLE_CHANNEL=telegram
 TELEGRAM_BOT_TOKEN=...     # from @BotFather
 TELEGRAM_CHAT_ID=...       # https://api.telegram.org/bot<TOKEN>/getUpdates
 ```

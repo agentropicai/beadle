@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-muster — manage the employees in this folder.
+beadle — manage the employees in this folder.
 
-    muster new <name>                  scaffold a new employee from templates/
-    muster run <employee> [task]       run one task, or every task the employee has
-    muster status                      what each employee last did, and whether it is stuck
-    muster schedule <employee> <task>  print the cron / systemd lines to install it
-    muster doctor                      check that the pieces this repo depends on are working
+    beadle new <name>                  scaffold a new employee from templates/
+    beadle run <employee> [task]       run one task, or every task the employee has
+    beadle status                      what each employee last did, and whether it is stuck
+    beadle schedule <employee> <task>  print the cron / systemd lines to install it
+    beadle doctor                      check that the pieces this repo depends on are working
 
 There is deliberately no daemon, no server and no web UI. cron already solved scheduling.
 """
@@ -42,7 +42,7 @@ def die(msg):
 
 def cmd_new(args):
     if not args:
-        die("usage: muster new <employee-name>")
+        die("usage: beadle new <employee-name>")
     name = args[0].strip().strip("/")
     d = os.path.join(lib.EMPLOYEES, name)
     if os.path.exists(d):
@@ -58,12 +58,12 @@ def cmd_new(args):
     print("  1. Write %semployees/%s/role.md%s. This is a job description, not a prompt." % (BOLD, name, OFF))
     print("  2. Copy templates/task.py into employees/%s/tasks/<task>.py" % name)
     print("  3. Fill in GATHER and the GATE. Run it by hand until the gate is quiet on a normal day.")
-    print("  4. muster schedule %s <task>" % name)
+    print("  4. beadle schedule %s <task>" % name)
 
 
 def cmd_run(args):
     if not args:
-        die("usage: muster run <employee> [task]")
+        die("usage: beadle run <employee> [task]")
     emp = args[0].strip("/")
     if emp not in employees():
         die("no such employee: %s (have: %s)" % (emp, ", ".join(employees()) or "none"))
@@ -99,7 +99,7 @@ def _last_journal(emp):
 def cmd_status(args):
     emps = employees()
     if not emps:
-        print("No employees yet. Try: muster new my-first-employee")
+        print("No employees yet. Try: beadle new my-first-employee")
         return
     now = datetime.datetime.now().astimezone()
     for emp in emps:
@@ -134,28 +134,28 @@ def cmd_status(args):
 
 def cmd_schedule(args):
     if len(args) < 2:
-        die("usage: muster schedule <employee> <task>")
+        die("usage: beadle schedule <employee> <task>")
     emp, task = args[0].strip("/"), args[1]
     path = os.path.join(lib.emp_dir(emp), "tasks", task + ".py")
     if not os.path.exists(path):
         die("no such task: %s/%s" % (emp, task))
     py = sys.executable
-    unit = "muster-%s-%s" % (emp, task)
+    unit = "beadle-%s-%s" % (emp, task)
     print("%sCron%s — every 10 minutes:\n" % (BOLD, OFF))
     print("  */10 * * * * cd %s && %s %s >> %s/logs/cron.log 2>&1\n" % (BASE, py, path, BASE))
     print("%ssystemd%s — /etc/systemd/system/%s.service :\n" % (BOLD, OFF, unit))
     print("""  [Unit]
-  Description=muster %s/%s
+  Description=beadle %s/%s
 
   [Service]
   Type=oneshot
   User=%s
   WorkingDirectory=%s
   ExecStart=%s %s
-""" % (emp, task, os.environ.get("USER", "muster"), BASE, py, path))
+""" % (emp, task, os.environ.get("USER", "beadle"), BASE, py, path))
     print("%ssystemd%s — /etc/systemd/system/%s.timer :\n" % (BOLD, OFF, unit))
     print("""  [Unit]
-  Description=muster %s/%s timer
+  Description=beadle %s/%s timer
 
   [Timer]
   OnCalendar=*:0/10
@@ -181,7 +181,7 @@ def cmd_doctor(args):
             mark = (GREEN + "ok  " + OFF) if good else (DIM + "--  " + OFF)
         print("  %s %-34s %s" % (mark, label, detail))
 
-    print("\n%sMuster doctor%s\n" % (BOLD, OFF))
+    print("\n%sBeadle doctor%s\n" % (BOLD, OFF))
     claude = shutil.which("claude")
     check("claude CLI on PATH", bool(claude), claude or "install it, then `claude login`")
     if claude:
@@ -189,7 +189,7 @@ def cmd_doctor(args):
         check("claude answers", not lib.failed(probe), probe[:70])
     check(".env present", os.path.exists(os.path.join(BASE, ".env")),
           "optional — console delivery works without it", required=False)
-    chan = lib.env("MUSTER_CHANNEL", "console")
+    chan = lib.env("BEADLE_CHANNEL", "console")
     check("delivery channel", True, chan)
     if chan == "telegram":
         check("telegram configured", bool(lib.env("TELEGRAM_BOT_TOKEN") and lib.env("TELEGRAM_CHAT_ID")))
