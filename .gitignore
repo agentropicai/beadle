@@ -1,0 +1,11 @@
+.env
+logs/
+employees/*/runs/
+employees/*/journal.jsonl
+employees/*/claims.jsonl
+employees/*/inbox.jsonl
+employees/*/baseline.json
+.deliver-failures.jsonl
+__pycache__/
+*.pyc
+.DS_Store

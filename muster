@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""
+muster — manage the employees in this folder.
+
+    muster new <name>                  scaffold a new employee from templates/
+    muster run <employee> [task]       run one task, or every task the employee has
+    muster status                      what each employee last did, and whether it is stuck
+    muster schedule <employee> <task>  print the cron / systemd lines to install it
+    muster doctor                      check that the pieces this repo depends on are working
+
+There is deliberately no daemon, no server and no web UI. cron already solved scheduling.
+"""
+import sys, os, json, subprocess, shutil, glob, datetime
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE)
+import lib
+
+GREEN, RED, DIM, BOLD, OFF = "\033[32m", "\033[31m", "\033[2m", "\033[1m", "\033[0m"
+if not sys.stdout.isatty():
+    GREEN = RED = DIM = BOLD = OFF = ""
+
+
+def employees():
+    if not os.path.isdir(lib.EMPLOYEES):
+        return []
+    return sorted(d for d in os.listdir(lib.EMPLOYEES)
+                  if os.path.isdir(os.path.join(lib.EMPLOYEES, d)) and not d.startswith("."))
+
+
+def tasks_of(emp):
+    return sorted(os.path.basename(p)[:-3]
+                  for p in glob.glob(os.path.join(lib.emp_dir(emp), "tasks", "*.py")))
+
+
+def die(msg):
+    print(RED + msg + OFF)
+    sys.exit(1)
+
+
+# ---------------------------------------------------------------------------------------
+
+def cmd_new(args):
+    if not args:
+        die("usage: muster new <employee-name>")
+    name = args[0].strip().strip("/")
+    d = os.path.join(lib.EMPLOYEES, name)
+    if os.path.exists(d):
+        die("%s already exists" % d)
+    os.makedirs(os.path.join(d, "tasks"))
+    shutil.copy(os.path.join(BASE, "templates", "role.md"), os.path.join(d, "role.md"))
+    open(os.path.join(d, "memory.md"), "w").write(
+        "# %s — curated memory\n\n## Learnings (durable, grounded)\n\n- (nothing yet)\n\n"
+        "## Open threads (what I am waiting on)\n\n- (nothing yet)\n\n"
+        "## Recent decisions\n\n- (nothing yet)\n" % name)
+    print("%sCreated employees/%s%s\n" % (GREEN, name, OFF))
+    print("Next, in this order — it matters:")
+    print("  1. Write %semployees/%s/role.md%s. This is a job description, not a prompt." % (BOLD, name, OFF))
+    print("  2. Copy templates/task.py into employees/%s/tasks/<task>.py" % name)
+    print("  3. Fill in GATHER and the GATE. Run it by hand until the gate is quiet on a normal day.")
+    print("  4. muster schedule %s <task>" % name)
+
+
+def cmd_run(args):
+    if not args:
+        die("usage: muster run <employee> [task]")
+    emp = args[0].strip("/")
+    if emp not in employees():
+        die("no such employee: %s (have: %s)" % (emp, ", ".join(employees()) or "none"))
+    want = args[1] if len(args) > 1 else None
+    todo = [want] if want else tasks_of(emp)
+    if not todo:
+        die("%s has no tasks in tasks/" % emp)
+    rc = 0
+    for t in todo:
+        path = os.path.join(lib.emp_dir(emp), "tasks", t + ".py")
+        if not os.path.exists(path):
+            die("no such task: %s (have: %s)" % (t, ", ".join(tasks_of(emp)) or "none"))
+        print("%s→ %s / %s%s" % (DIM, emp, t, OFF), flush=True)
+        r = subprocess.run([sys.executable, path])
+        rc = rc or r.returncode
+    sys.exit(rc)
+
+
+def _last_journal(emp):
+    p = os.path.join(lib.emp_dir(emp), "journal.jsonl")
+    if not os.path.exists(p):
+        return {}
+    last = {}
+    for ln in open(p):
+        try:
+            r = json.loads(ln)
+        except Exception:
+            continue
+        last[r.get("task", "?")] = r
+    return last
+
+
+def cmd_status(args):
+    emps = employees()
+    if not emps:
+        print("No employees yet. Try: muster new my-first-employee")
+        return
+    now = datetime.datetime.now().astimezone()
+    for emp in emps:
+        print("\n%s%s%s" % (BOLD, emp, OFF))
+        last = _last_journal(emp)
+        ts = tasks_of(emp)
+        if not ts:
+            print("  %s(no tasks)%s" % (DIM, OFF))
+        for t in ts:
+            r = last.get(t)
+            if not r:
+                print("  %-24s %snever run%s" % (t, DIM, OFF))
+                continue
+            try:
+                age = now - datetime.datetime.fromisoformat(r["ts"])
+                age_s = "%dh ago" % (age.total_seconds() // 3600) if age.total_seconds() >= 3600 \
+                    else "%dm ago" % (age.total_seconds() // 60)
+            except Exception:
+                age_s = "?"
+            print("  %-24s %-10s %s" % (t, age_s, r.get("summary", "")[:90]))
+        rows, due = lib.claims_due(emp, after_hours=0)
+        pending = sum(1 for r in rows if r.get("outcome") is None)
+        if rows:
+            outcomes = [r["outcome"] for r in rows if r.get("outcome")]
+            print("  %sclaims: %d total, %d awaiting reconcile, %d checked%s"
+                  % (DIM, len(rows), pending, len(outcomes), OFF))
+    # delivery failures are the silent killer — surface them unprompted
+    if os.path.exists(lib.DELIVERFAIL):
+        n = sum(1 for _ in open(lib.DELIVERFAIL))
+        print("\n%s%d delivery failure(s) recorded in .deliver-failures.jsonl%s" % (RED, n, OFF))
+
+
+def cmd_schedule(args):
+    if len(args) < 2:
+        die("usage: muster schedule <employee> <task>")
+    emp, task = args[0].strip("/"), args[1]
+    path = os.path.join(lib.emp_dir(emp), "tasks", task + ".py")
+    if not os.path.exists(path):
+        die("no such task: %s/%s" % (emp, task))
+    py = sys.executable
+    unit = "muster-%s-%s" % (emp, task)
+    print("%sCron%s — every 10 minutes:\n" % (BOLD, OFF))
+    print("  */10 * * * * cd %s && %s %s >> %s/logs/cron.log 2>&1\n" % (BASE, py, path, BASE))
+    print("%ssystemd%s — /etc/systemd/system/%s.service :\n" % (BOLD, OFF, unit))
+    print("""  [Unit]
+  Description=muster %s/%s
+
+  [Service]
+  Type=oneshot
+  User=%s
+  WorkingDirectory=%s
+  ExecStart=%s %s
+""" % (emp, task, os.environ.get("USER", "muster"), BASE, py, path))
+    print("%ssystemd%s — /etc/systemd/system/%s.timer :\n" % (BOLD, OFF, unit))
+    print("""  [Unit]
+  Description=muster %s/%s timer
+
+  [Timer]
+  OnCalendar=*:0/10
+  Persistent=true
+
+  [Install]
+  WantedBy=timers.target
+""" % (emp, task))
+    print("  sudo systemctl daemon-reload && sudo systemctl enable --now %s.timer" % unit)
+    print("\n%sPersistent=true matters: it catches up after a reboot instead of silently"
+          " skipping a run.%s" % (DIM, OFF))
+
+
+def cmd_doctor(args):
+    ok = True
+
+    def check(label, good, detail="", required=True):
+        nonlocal ok
+        if required:
+            ok = ok and good
+            mark = (GREEN + "ok  " + OFF) if good else (RED + "FAIL" + OFF)
+        else:
+            mark = (GREEN + "ok  " + OFF) if good else (DIM + "--  " + OFF)
+        print("  %s %-34s %s" % (mark, label, detail))
+
+    print("\n%sMuster doctor%s\n" % (BOLD, OFF))
+    claude = shutil.which("claude")
+    check("claude CLI on PATH", bool(claude), claude or "install it, then `claude login`")
+    if claude:
+        probe = lib.llm("Reply with exactly: OK", timeout=60)
+        check("claude answers", not lib.failed(probe), probe[:70])
+    check(".env present", os.path.exists(os.path.join(BASE, ".env")),
+          "optional — console delivery works without it", required=False)
+    chan = lib.env("MUSTER_CHANNEL", "console")
+    check("delivery channel", True, chan)
+    if chan == "telegram":
+        check("telegram configured", bool(lib.env("TELEGRAM_BOT_TOKEN") and lib.env("TELEGRAM_CHAT_ID")))
+    if chan == "slack":
+        check("slack configured", bool(lib.env("SLACK_WEBHOOK_URL")))
+    check("psql on PATH", bool(shutil.which("psql")), "only needed if a task uses lib.sql()", required=False)
+    check("employees found", bool(employees()), ", ".join(employees()) or "none")
+    print("\n%s" % ((GREEN + "All good." + OFF) if ok else (RED + "Something above needs fixing." + OFF)))
+
+
+CMDS = {"new": cmd_new, "run": cmd_run, "status": cmd_status,
+        "schedule": cmd_schedule, "doctor": cmd_doctor}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
+        print(__doc__)
+        sys.exit(0)
+    cmd = sys.argv[1]
+    if cmd not in CMDS:
+        die("unknown command: %s\n%s" % (cmd, __doc__))
+    CMDS[cmd](sys.argv[2:])
