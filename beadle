@@ -133,16 +133,39 @@ def cmd_status(args):
 
 
 def cmd_schedule(args):
+    """Print the cron / systemd lines. With --install, add the cron entry after confirmation.
+
+    Installing is opt-in and confirmed on purpose. Editing someone's crontab as a side effect of
+    another command is precisely the unannounced irreversible action this whole repo argues
+    against, and doing it here would be hypocritical.
+    """
     if len(args) < 2:
-        die("usage: beadle schedule <employee> <task>")
+        die("usage: beadle schedule <employee> <task> [--cron \"<expr>\"] [--install]")
     emp, task = args[0].strip("/"), args[1]
     path = os.path.join(lib.emp_dir(emp), "tasks", task + ".py")
     if not os.path.exists(path):
         die("no such task: %s/%s" % (emp, task))
+
+    install = "--install" in args
+    expr = "*/10 * * * *"
+    if "--cron" in args:
+        i = args.index("--cron")
+        if i + 1 >= len(args):
+            die('--cron needs an expression, e.g. --cron "30 9 * * *"')
+        expr = args[i + 1]
+
     py = sys.executable
     unit = "beadle-%s-%s" % (emp, task)
-    print("%sCron%s — every 10 minutes:\n" % (BOLD, OFF))
-    print("  */10 * * * * cd %s && %s %s >> %s/logs/cron.log 2>&1\n" % (BASE, py, path, BASE))
+    marker = "# beadle:%s/%s" % (emp, task)
+    line = "%s cd %s && %s %s >> %s/logs/cron.log 2>&1  %s" % (expr, BASE, py, path, BASE, marker)
+
+    if install:
+        return _install_cron(emp, task, line, marker)
+
+    print("%sCron%s — %s:\n" % (BOLD, OFF, expr))
+    print("  " + line + "\n")
+    print("  %sOr let beadle add it for you:%s  ./beadle schedule %s %s --cron \"%s\" --install\n"
+          % (DIM, OFF, emp, task, expr))
     print("%ssystemd%s — /etc/systemd/system/%s.service :\n" % (BOLD, OFF, unit))
     print("""  [Unit]
   Description=beadle %s/%s
@@ -167,6 +190,38 @@ def cmd_schedule(args):
     print("  sudo systemctl daemon-reload && sudo systemctl enable --now %s.timer" % unit)
     print("\n%sPersistent=true matters: it catches up after a reboot instead of silently"
           " skipping a run.%s" % (DIM, OFF))
+
+
+def _install_cron(emp, task, line, marker):
+    """Append one line to the user's crontab, after showing it and asking."""
+    existing = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+    current = existing.stdout if existing.returncode == 0 else ""
+    if marker in current:
+        print("%sAlready scheduled%s — a crontab entry tagged %s exists:" % (GREEN, OFF, marker))
+        for ln in current.splitlines():
+            if marker in ln:
+                print("  " + ln)
+        print("\nRemove it with `crontab -e` before installing a different schedule.")
+        return
+    print("%sThis will be appended to your crontab:%s\n" % (BOLD, OFF))
+    print("  " + line + "\n")
+    print("%sRemove it later with `crontab -e` — look for %s%s" % (DIM, marker, OFF))
+    try:
+        answer = input("\nAdd it? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print("\naborted")
+        return
+    if answer not in ("y", "yes"):
+        print("aborted — nothing changed")
+        return
+    new = (current.rstrip("\n") + "\n" + line + "\n").lstrip("\n")
+    p = subprocess.run(["crontab", "-"], input=new, text=True, capture_output=True)
+    if p.returncode != 0:
+        die("crontab failed: " + (p.stderr or "")[:200])
+    os.makedirs(os.path.join(BASE, "logs"), exist_ok=True)
+    print("%sInstalled.%s It will run on that schedule from now on." % (GREEN, OFF))
+    print("Watch the first few: %stail -f %s/logs/cron.log%s" % (DIM, BASE, OFF))
+    print("%sRemember: it is not finished until it says nothing on a quiet day.%s" % (DIM, OFF))
 
 
 def cmd_doctor(args):

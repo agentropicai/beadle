@@ -33,9 +33,12 @@ Also ask what the data source is, and confirm the credential for it is **read-on
 **reversibility** (a wrong answer is expensive) or **on-demand vs scheduled**, say so directly and
 offer the reporting-only version of the same idea instead. Do not build a customer-facing agent.
 
-## Then write two files
+## Then scaffold and write
 
-- `employees/<name>/role.md` — from `templates/role.md`. The mandate must name the lever and the
+First run `./beadle new <name>` so the folder is created the same way as every other employee
+(this also creates `memory.md`, which the judge reads on every run). Then write:
+
+- `employees/<name>/role.md` — overwrite the template. The mandate must name the lever and the
   failure mode to design against. Fill `Settled decisions` from their answers.
 - `employees/<name>/tasks/<task>.py` — from `templates/task.py`, or adapted from the closest
   example. Obey every rule in `CLAUDE.md`, in particular:
@@ -45,6 +48,9 @@ offer the reporting-only version of the same idea instead. Do not build a custom
   - One `lib.llm()` call. A machine-readable first word. An explicit way to say "nothing here".
   - Check `lib.failed()`. Never deliver on `mode == "sample"`.
   - Claim only what you deliver; persist everything that passed the gate.
+
+If the task needs a new config key, read it via `lib.env("BEADLE_...")` and add it to
+`.env.example` with a one-line comment. Never hardcode a URL, DSN or repo name into a task.
 
 Pick starting thresholds deliberately and **say in a comment that they are guesses to be tuned
 against a real day** — do not present a guessed number as a decision.
@@ -60,6 +66,13 @@ Show the user the actual output. Then tell them, in plain words:
 - whether the gate tripped, and whether that was correct for today
 - if it tripped on a normal day, that the fix is the threshold, **not the prompt**
 - that it is not finished until it produces nothing on a quiet day
-- what to do next: run it by hand for a few days, then `./beadle schedule`, then add a reconciler
+
+Then print the exact scheduling command for the cadence the mandate implies — for example
+`./beadle schedule <name> <task> --cron "30 9 * * *"` — and tell them to run it themselves once
+the task has been quiet on a quiet day.
+
+**Do not install the cron entry.** Do not run `--install`, do not touch `crontab`, do not write a
+systemd unit. Scheduling something to run unattended on someone's machine is a decision they make,
+not a side effect of asking for help — which is the same rule every employee in this repo follows.
 
 Do not claim it works because it ran. Say what it did.

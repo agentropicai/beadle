@@ -77,4 +77,13 @@ These are the failure modes seen repeatedly. Each one produces code that runs an
 ```
 
 A new task is not finished when it produces output. It is finished when it produces **nothing** on
-a normal day. Run it by hand until that is true, then schedule it.
+a normal day. Run it by hand until that is true, then schedule it:
+
+```bash
+./beadle schedule <employee> <task> --cron "30 9 * * *"             # prints the line
+./beadle schedule <employee> <task> --cron "30 9 * * *" --install   # adds it, after confirming
+```
+
+**Never install a schedule on a user's behalf without being asked.** `--install` edits their
+crontab; it exists so a human can opt in, not so a tool can be helpful. Print the command and let
+them run it.
