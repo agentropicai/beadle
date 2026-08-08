@@ -201,11 +201,14 @@ def _record_deliverfail(target, detail):
         pass
 
 
-def deliver(text, channel=None):
+def deliver(text, channel=None, webhook=None):
     """Send a message. Channel defaults to BEADLE_CHANNEL, which defaults to the console.
 
     Console delivery means the repo works before you have configured anything. Switch to
     telegram/slack once the output is worth reading.
+
+    `webhook` overrides SLACK_WEBHOOK_URL for this one send. Pass it when an employee has its
+    own channel — muting one employee should never mean muting all of them.
     """
     channel = channel or env("BEADLE_CHANNEL", "console")
     if channel == "console":
@@ -214,7 +217,7 @@ def deliver(text, channel=None):
     if channel == "telegram":
         return _deliver_telegram(text)
     if channel == "slack":
-        return _deliver_slack(text)
+        return _deliver_slack(text, webhook)
     _record_deliverfail(channel, "unknown channel")
     return "ERR:unknown-channel"
 
@@ -243,8 +246,8 @@ def _deliver_telegram(text):
         return "ERR:" + str(ex)[:80]
 
 
-def _deliver_slack(text):
-    hook = env("SLACK_WEBHOOK_URL")
+def _deliver_slack(text, hook=None):
+    hook = hook or env("SLACK_WEBHOOK_URL")
     if not hook:
         _record_deliverfail("slack", "missing SLACK_WEBHOOK_URL")
         return "ERR:not-configured"
