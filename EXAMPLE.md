@@ -6,6 +6,9 @@ terminal — including the bug I hit on the way, because you will hit it too.
 We're building **hn-watch**: an employee that tells me when Hacker News is talking about us.
 Nothing to install beyond the repo, no credentials, no database.
 
+> The finished version ships in this repo as `employees/example-hn-watch/` — read it after, or
+> alongside. Everything below is how it got there.
+
 ---
 
 ## Step 1 — scaffold it (5 seconds)

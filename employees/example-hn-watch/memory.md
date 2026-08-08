@@ -1,4 +1,4 @@
-# hn-watch — curated memory
+# example-hn-watch — curated memory
 
 ## Learnings (durable, grounded)
 

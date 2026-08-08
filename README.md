@@ -131,6 +131,7 @@ Three, all runnable before you write a line. Read one, then delete it and write 
 | **example-site-watch** | nothing | the gate, and the HARD/SOFT split — why a judge must only be asked what it can answer |
 | **example-pr-nag** | `gh auth status` green | the full outcome loop: claim what you told a human, then check a day later whether they acted |
 | **example-page-watch** | nothing | quarantine — it reads text written by competitors, so it holds no credentials and no shell |
+| **example-hn-watch** | nothing | the one built from scratch in [EXAMPLE.md](EXAMPLE.md), bug and all |
 
 ## Guardrails, on day one
 

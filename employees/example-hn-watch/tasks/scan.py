@@ -16,7 +16,7 @@ import sys, os, json, pathlib, urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 import lib
 
-EMP = "hn-watch"
+EMP = "example-hn-watch"
 TASK = "scan"
 
 # --- thresholds, named and explained ----------------------------------------------------
