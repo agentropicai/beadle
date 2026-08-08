@@ -196,23 +196,52 @@ silent — 30 hit(s) across 1 term(s) in 48h; 0 new and above the floor
 It was in state management, it was invisible from the output, and it was found by running the
 thing three times in a row and noticing a number that should have gone to zero.
 
-## Step 6 — schedule it (2 minutes)
+## Step 6 — employ it (30 seconds)
+
+Up to now this is a script you can run. This is the step that makes it an employee:
 
 ```console
-$ ./beadle schedule hn-watch scan
-Cron — every 10 minutes:
+$ ./beadle schedule hn-watch scan --cron "0 9-22 * * *"
 
-  */10 * * * * cd /path/to/beadle && python3 .../tasks/scan.py >> .../logs/cron.log 2>&1
+Scheduling hn-watch/scan — it will run on its own from now on:
 
-systemd — /etc/systemd/system/beadle-hn-watch-scan.service :
-  ...
+  0 9-22 * * *
+
+Go ahead? [Y/n] y
+
+hn-watch/scan is now employed.  Schedule: 0 9-22 * * *
+  watch it:  tail -f logs/cron.log
+  check in:  ./beadle status
+  stop it:   ./beadle unschedule hn-watch scan
+
+It will be quiet until something happens. That is the point — if it talks on a
+normal day, tune the threshold, not the prompt.
 ```
 
-Change the schedule to what the mandate actually needs — hourly during working hours here, not
-every ten minutes — paste it into `crontab -e`, and point `BEADLE_CHANNEL` at Telegram or Slack.
+**Pick the cadence from the mandate, not from habit.** This one is hourly during waking hours,
+because the lever is response time and a thread found at 3am is no fresher than one found at 9am.
+A production monitor runs every ten minutes. A weekly review runs weekly.
 
-Give the employee **its own channel**, not a shared one, so muting it is a decision about this
-employee rather than about all of them.
+Then point delivery somewhere you will actually read:
+
+```
+BEADLE_CHANNEL=telegram
+TELEGRAM_BOT_TOKEN=...     # from @BotFather
+TELEGRAM_CHAT_ID=...       # https://api.telegram.org/bot<TOKEN>/getUpdates
+```
+
+Give it **its own channel**, not a shared one — so muting it is a decision about this employee
+rather than about all of them.
+
+```console
+$ ./beadle status
+
+hn-watch
+  scan          0 9-22 * * *   12m ago   silent — 30 hits, 0 new above the floor
+```
+
+That schedule column is the answer to "is this thing actually employed?" — and
+`./beadle unschedule hn-watch scan` is how you stop it. Files untouched; reschedule any time.
 
 ---
 
