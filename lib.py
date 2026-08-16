@@ -12,8 +12,15 @@ max-turns 1. If you find yourself wanting to give it tools, you want a different
 """
 import os, sys, subprocess, json, datetime, re, html, urllib.request, urllib.parse, importlib.util
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-EMPLOYEES = os.path.join(BASE, "employees")
+# Where the workspace lives. Defaults to this file's directory, which is what you want when lib.py
+# sits in the workspace you cloned. Set BEADLE_HOME when it does not: `pip install beadle` ships
+# this same file as `beadle.lib`, and an existing codebase can then import the harness while
+# keeping its employees, .env and logs in its own repo instead of in site-packages.
+#
+# BEADLE_EMPLOYEES is separate because a consumer may already have a layout: point it at the repo
+# root and pass employee names with a prefix ("gagahealth/sre") rather than reorganising folders.
+BASE = os.environ.get("BEADLE_HOME") or os.path.dirname(os.path.abspath(__file__))
+EMPLOYEES = os.environ.get("BEADLE_EMPLOYEES") or os.path.join(BASE, "employees")
 
 
 # --------------------------------------------------------------------------------------

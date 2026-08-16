@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "beadle"
-version = "0.1.0"
+version = "0.2.0"
 description = "Build an AI employee without building an agent platform — deterministic checks, one-shot judgment, and a gate that keeps the model out of the loop on quiet days."
 readme = "PYPI.md"
 requires-python = ">=3.9"
@@ -31,5 +31,12 @@ beadle = "beadle:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/beadle"]
 
+# The harness itself, shipped as `beadle.lib` so an existing codebase can `from beadle import lib`
+# instead of cloning a workspace. One source file, two ways to consume it: workspace users edit
+# their own copy (and have thereby forked, which is the intent), library users get the pinned
+# release. Keep it force-included rather than duplicated in src/ so there is only ever one lib.py.
+[tool.hatch.build.targets.wheel.force-include]
+"lib.py" = "beadle/lib.py"
+
 [tool.hatch.build.targets.sdist]
-include = ["src/beadle", "PYPI.md", "LICENSE"]
+include = ["src/beadle", "lib.py", "PYPI.md", "LICENSE"]
