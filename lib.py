@@ -10,7 +10,7 @@ The one rule the rest of the design follows from:
 So there is no agent loop in here. `llm()` is one subprocess call with tools disabled and
 max-turns 1. If you find yourself wanting to give it tools, you want a different repo.
 """
-import os, sys, subprocess, json, datetime, re, html, urllib.request, urllib.parse, importlib.util
+import os, sys, subprocess, json, datetime, re, html, shutil, urllib.request, urllib.parse, importlib.util
 
 # Where the workspace lives. Defaults to this file's directory, which is what you want when lib.py
 # sits in the workspace you cloned. Set BEADLE_HOME when it does not: `pip install beadle` ships
@@ -62,13 +62,20 @@ def llm(prompt, model=None, timeout=180):
     to your team is worse than a task that stays silent.
     """
     model = model or env("BEADLE_MODEL", "claude-sonnet-4-6")
+    # Resolve the binary rather than trusting PATH. cron runs with a near-empty PATH that does not
+    # include ~/.local/bin, which is where the CLI installs, so a task that works by hand fails on
+    # every scheduled run with "claude CLI not found". That killed a live fleet for eight days
+    # while every other part of it reported healthy. BEADLE_CLAUDE_BIN overrides.
+    cli = env("BEADLE_CLAUDE_BIN") or shutil.which("claude") or "claude"
     try:
         r = subprocess.run(
-            ["claude", "-p", "--model", model, "--max-turns", "1", "--tools", ""],
+            [cli, "-p", "--model", model, "--max-turns", "1", "--tools", ""],
             input=prompt, capture_output=True, text=True, errors="replace", timeout=timeout,
         )
     except FileNotFoundError:
-        return "LLM_ERROR: `claude` CLI not found. Install it and run `claude login`."
+        return ("LLM_ERROR: `claude` CLI not found at %r. Install it and run `claude login`, or set "
+                "BEADLE_CLAUDE_BIN to its absolute path. If this only happens on scheduled runs, "
+                "cron's PATH is the cause: re-run `./beadle schedule` to pin the absolute path." % cli)
     except subprocess.TimeoutExpired:
         return "LLM_ERROR: timed out after %ss" % timeout
 

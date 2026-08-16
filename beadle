@@ -162,7 +162,13 @@ def cmd_schedule(args):
     py = sys.executable
     unit = "beadle-%s-%s" % (emp, task)
     marker = "# beadle:%s/%s" % (emp, task)
-    line = "%s cd %s && %s %s >> %s/logs/cron.log 2>&1  %s" % (expr, BASE, py, path, BASE, marker)
+    # Pin the CLI's absolute path into the cron line. cron does not get your shell's PATH, and the
+    # claude CLI lives in ~/.local/bin, so a task verified by hand otherwise fails on every
+    # scheduled run with "claude CLI not found" while the employee still looks scheduled and
+    # healthy. Pinning python without pinning the CLI is half a fix.
+    cli = shutil.which("claude")
+    prefix = "BEADLE_CLAUDE_BIN=%s " % cli if cli else ""
+    line = "%s cd %s && %s%s %s >> %s/logs/cron.log 2>&1  %s" % (expr, BASE, prefix, py, path, BASE, marker)
 
     if "--print" not in args:
         return _install_cron(emp, task, line, marker, expr, assume_yes="--yes" in args)
