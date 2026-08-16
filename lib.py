@@ -390,16 +390,29 @@ def default_facts(emp):
     facts.append(probe(_delivery, "Delivery is FAILING right now: the channel did not answer."))
 
     def _claims():
-        rows, due = claims_due(emp, after_hours=0)
+        rows, _ = claims_due(emp, after_hours=0)
         if not rows:
             return ("This employee has made 0 claims, so it has NO measured action rate yet. Do not "
                     "describe its work as effective or ignored; there is no evidence either way.")
         checked = [r for r in rows if r.get("outcome") is not None]
-        acted = [r for r in checked if r.get("outcome") not in (None, "still_open", "ignored")]
-        rate = "%d%%" % round(100 * len(acted) / len(checked)) if checked else "not yet measured"
-        return ("Claims RIGHT NOW: %d total, %d awaiting reconcile, %d checked, action rate %s. Use "
-                "THIS as the action rate and correct any memory item claiming a different one."
-                % (len(rows), len(rows) - len(checked), len(checked), rate))
+        if not checked:
+            return ("Claims RIGHT NOW: %d total, NONE reconciled yet. The action rate is UNKNOWN, "
+                    "which is not the same as good. Do not describe this employee as effective."
+                    % len(rows))
+        # Report the buckets, not one number. "Acted on" and "got the outcome we wanted" are
+        # different questions and a single rate silently answers whichever one you were not asking:
+        # a closed-unmerged PR is a human acting, and is also the work being thrown away.
+        buckets = {}
+        for r in checked:
+            buckets[str(r["outcome"])] = buckets.get(str(r["outcome"]), 0) + 1
+        acted = sum(n for o, n in buckets.items() if o not in ("still_open", "ignored"))
+        return ("Claims RIGHT NOW: %d total, %d awaiting reconcile, %d resolved (%s). A human acted "
+                "on %d of %d resolved (%d%%). Use THESE numbers and correct any memory item "
+                "claiming different ones; if memory quotes a success rate that is not one of these "
+                "buckets, it is a different metric and must say which."
+                % (len(rows), len(rows) - len(checked), len(checked),
+                   ", ".join("%s %d" % (o, n) for o, n in sorted(buckets.items())),
+                   acted, len(checked), round(100 * acted / len(checked))))
     facts.append(probe(_claims))
 
     def _self():
