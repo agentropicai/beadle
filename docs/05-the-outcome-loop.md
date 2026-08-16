@@ -88,7 +88,7 @@ The last step of the loop is `consolidate()`, which re-curates `memory.md` from 
 alone it develops a specific and dangerous failure: **it starts remembering a number instead of
 checking it.** An employee that watched eight open pull requests keeps reporting eight for weeks
 after six of them merged, because nothing ever contradicts it. Worse, the journal only records
-failures, never recoveries — so "delivery is broken" and "that unit keeps crashing" survive long
+failures, never recoveries, so "delivery is broken" and "that unit keeps crashing" survive long
 after both were fixed, and every digest built on that memory inherits the error.
 
 The fix is not prompt engineering. It is handing the model something authoritative to correct
@@ -101,7 +101,7 @@ lib.consolidate(EMP)          # calls ground_facts(EMP) for you
 `ground_facts` returns what is true *right now*, and the consolidation prompt states that these
 override anything in memory that disagrees. Every employee gets four for free from
 `default_facts()`: the time, whether delivery actually works, its own action rate from
-`claims.jsonl`, and **whether its own tasks are erroring** — the one thing an employee cannot see
+`claims.jsonl`, and **whether its own tasks are erroring**: the one thing an employee cannot see
 about itself, and the reason a fleet can sit dead for a week while its memory reads healthy.
 
 Add your own in `employees/<name>/facts.py`, defining `facts()` returning a list of strings. See

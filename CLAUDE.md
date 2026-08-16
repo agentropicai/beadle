@@ -51,7 +51,7 @@ own `facts.py`, which adds to the four `default_facts()` every employee already 
   problem stays in memory indefinitely. A fact must be able to say "nothing is stale" / "delivery
   is healthy, drop any thread claiming otherwise", or memory only ever accumulates.
 - **Wrap every probe in `lib.probe()`.** It cannot raise, and "could not verify" is an honest
-  fact — omitting a failed check silently reads to the model as "no problem here".
+  fact. Omitting a failed check silently reads to the model as "no problem here".
 - **Ground anything memory has been caught inventing.** Counts, queue depths, whether an
   integration is broken. If you have corrected memory about it twice by hand, it is a fact.
 - Facts are for what you can check cheaply and deterministically. A probe that needs a model is

@@ -344,7 +344,7 @@ def probe(fn, unavailable=None):
     """Run one ground-truth probe. Never raises.
 
     A probe that dies must not take the consolidation down with it, and "could not verify" is
-    itself an honest fact — much better than silently omitting the check, which reads to the
+    itself an honest fact, much better than silently omitting the check, which reads to the
     model as "no problem here".
     """
     try:
@@ -426,8 +426,12 @@ def default_facts(emp):
             except Exception:
                 continue
             last[r.get("task", "?")] = r
-        broken = [t for t, r in last.items() if failed(str(r.get("summary", "")))
-                  or "skipped" in str(r.get("summary", ""))[:9].lower()]
+        # A broken run reaches the journal in more than one shape: bare "LLM_ERROR: ..." straight
+        # from llm(), or wrapped by the task ("skipped — LLM_ERROR: ..."). Match the marker
+        # anywhere in the summary rather than at the front, so a task that words its own prefix
+        # differently is still caught. This is the fact that would have surfaced a fleet sitting
+        # dead for eight days on a missing CLI, so it should not hinge on a string prefix.
+        broken = [t for t, r in last.items() if "LLM_ERROR" in str(r.get("summary", ""))]
         if broken:
             return ("These tasks are BROKEN on their most recent run: %s. This is an outage of the "
                     "employee itself, not a quiet period. Open a thread for it and do not report "
@@ -443,7 +447,7 @@ def ground_facts(emp):
     """default_facts plus whatever employees/<emp>/facts.py adds.
 
     Convention: that file defines `facts()` returning a list of plain strings. Employee-specific
-    truth is the whole point — the generic probes cannot know that this employee's memory keeps
+    truth is the whole point: the generic probes cannot know that this employee's memory keeps
     inventing a PR count or a queue depth.
 
     Phrase a fact as an INSTRUCTION, not a datum. "Open PRs: 2" invites the model to keep its

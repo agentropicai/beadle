@@ -62,7 +62,7 @@ def _nagged_recently():
     merged = [r for r in rows if r.get("outcome") == "merged"]
     checked = [r for r in rows if r.get("outcome") is not None]
     if not checked:
-        return ("%d PRs nagged, NONE reconciled yet — the nag-to-merge rate is unknown, not good. "
+        return ("%d PRs nagged, NONE reconciled yet. The nag-to-merge rate is unknown, not good. "
                 "Do not claim this employee is working." % len(rows))
     return ("Nag-to-merge RIGHT NOW: %d of %d reconciled nags ended in a merge (%d%%). Use THIS "
             "rate." % (len(merged), len(checked), round(100 * len(merged) / len(checked))))
