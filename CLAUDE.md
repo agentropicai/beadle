@@ -39,6 +39,24 @@ These are the failure modes seen repeatedly. Each one produces code that runs an
 - **Thresholds go at the top of the file, named, with a comment saying which false alarm caused
   them.** When the employee is noisy the fix is here, not in the prompt.
 
+## Ground facts (`employees/<name>/facts.py`)
+
+`consolidate()` calls `ground_facts()` automatically. Everything below is about the employee's
+own `facts.py`, which adds to the four `default_facts()` every employee already gets.
+
+- **Write the fact as an instruction, not a datum.** `Open PRs: 2` lets the model keep its own
+  figure next to yours; `Open PRs RIGHT NOW: 2. Correct any memory item claiming a different
+  count` is what actually overwrites the drift.
+- **Say the all-clear out loud.** Journals record failures and never recoveries, so a resolved
+  problem stays in memory indefinitely. A fact must be able to say "nothing is stale" / "delivery
+  is healthy, drop any thread claiming otherwise", or memory only ever accumulates.
+- **Wrap every probe in `lib.probe()`.** It cannot raise, and "could not verify" is an honest
+  fact — omitting a failed check silently reads to the model as "no problem here".
+- **Ground anything memory has been caught inventing.** Counts, queue depths, whether an
+  integration is broken. If you have corrected memory about it twice by hand, it is a fact.
+- Facts are for what you can check cheaply and deterministically. A probe that needs a model is
+  not a fact, it is another task.
+
 ## Writing role.md
 
 - The mandate must name **the lever** — the number that moves if this works — not the topic.

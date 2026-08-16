@@ -82,6 +82,57 @@ This is the part that gets misread, so be careful:
   report, and you would never have learned it otherwise.
 - **A rate you never look at is worth nothing.** Put it in the weekly digest.
 
+## Memory drifts, and a better prompt will not fix it
+
+The last step of the loop is `consolidate()`, which re-curates `memory.md` from the journal. Left
+alone it develops a specific and dangerous failure: **it starts remembering a number instead of
+checking it.** An employee that watched eight open pull requests keeps reporting eight for weeks
+after six of them merged, because nothing ever contradicts it. Worse, the journal only records
+failures, never recoveries — so "delivery is broken" and "that unit keeps crashing" survive long
+after both were fixed, and every digest built on that memory inherits the error.
+
+The fix is not prompt engineering. It is handing the model something authoritative to correct
+itself against, every single time it curates:
+
+```python
+lib.consolidate(EMP)          # calls ground_facts(EMP) for you
+```
+
+`ground_facts` returns what is true *right now*, and the consolidation prompt states that these
+override anything in memory that disagrees. Every employee gets four for free from
+`default_facts()`: the time, whether delivery actually works, its own action rate from
+`claims.jsonl`, and **whether its own tasks are erroring** — the one thing an employee cannot see
+about itself, and the reason a fleet can sit dead for a week while its memory reads healthy.
+
+Add your own in `employees/<name>/facts.py`, defining `facts()` returning a list of strings. See
+`example-pr-nag/facts.py`. Two rules, both learned by getting them wrong:
+
+- **Phrase a fact as an instruction, not a datum.** `Open PRs: 2` invites the model to keep its
+  own figure alongside yours. `Open PRs RIGHT NOW: 2. Correct any memory item claiming a
+  different count` is what overwrites the drift.
+- **State the all-clear explicitly.** A fact that says "3 are stale" leaves a memory of "12 are
+  stale" partly standing. One that ends "nothing else is stale" closes it.
+
+Wrap each probe in `lib.probe()`. It never raises, and it degrades to "could not verify", which
+is an honest fact. Silently omitting a failed check reads to the model as "no problem here".
+
+### The failure this prevents, in full
+
+A real one, worth reading as a whole. A monitoring employee had ten checks pointing at servers
+that had been decommissioned. They failed on every run for eight days and 1,185 runs. Nobody was
+lying and nothing was hidden: the alerts fired, the journal recorded them, and the employee
+faithfully summarised them every ten minutes.
+
+Then its memory consolidated the pattern into a learning: *"prod-monitor: 49 checks; steady-state
+10 failing."* Followed by a hand-maintained list of "benign flaps" to ignore. The employee had
+taught itself that red was normal, which is exactly what a human does with an alarm that goes off
+every day, and it did it in under a week.
+
+**A gate with too many false positives teaches the agent to route around it.** A check nobody
+trusts is worse than no check, because it also occupies the slot where a real check would go. The
+ground fact that fixes this does not just state the count; it states the rule: *a failing check is
+an outage or a broken check, never a steady state.*
+
 ## Closing the loop on the humans too
 
 The original fleet needed one more task that nobody plans for: a `stale-work` employee that nags

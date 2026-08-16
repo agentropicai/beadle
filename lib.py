@@ -10,7 +10,7 @@ The one rule the rest of the design follows from:
 So there is no agent loop in here. `llm()` is one subprocess call with tools disabled and
 max-turns 1. If you find yourself wanting to give it tools, you want a different repo.
 """
-import os, sys, subprocess, json, datetime, re, html, urllib.request, urllib.parse
+import os, sys, subprocess, json, datetime, re, html, urllib.request, urllib.parse, importlib.util
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 EMPLOYEES = os.path.join(BASE, "employees")
@@ -333,13 +333,125 @@ def ctx(emp, n=30):
             % (role(emp), memory_get(emp), journal_recent(emp, n)))
 
 
-def consolidate(emp, facts=""):
+def probe(fn, unavailable=None):
+    """Run one ground-truth probe. Never raises.
+
+    A probe that dies must not take the consolidation down with it, and "could not verify" is
+    itself an honest fact — much better than silently omitting the check, which reads to the
+    model as "no problem here".
+    """
+    try:
+        return fn()
+    except Exception as e:
+        return unavailable or "could not verify (%s)" % str(e)[:60]
+
+
+def default_facts(emp):
+    """Ground truth every employee gets for free, regardless of what it does.
+
+    Each of these exists because memory drifted on it somewhere real:
+
+    - **Delivery health.** An employee whose channel broke journals failures and nothing else,
+      so "delivery is broken" persists in memory long after it is fixed. State the live answer.
+    - **The action rate.** The employee's own effect, from claims.jsonl. Memory is otherwise
+      happy to describe a stream of ignored output as productive work.
+    - **Its own last runs.** A task erroring every run is the one thing an employee cannot see
+      about itself: `LLM_ERROR` is journalled and then never mentioned again. This fact is what
+      turns "I have been dead for eight days" into something the next consolidation must reckon
+      with rather than quietly average out.
+    """
+    facts = [probe(lambda: "Now: " + datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"))]
+
+    def _delivery():
+        ch = env("BEADLE_CHANNEL", "console")   # same resolution deliver() uses
+        healthy = ("Delivery is HEALTHY right now (%s). DROP any memory thread claiming "
+                   "delivery/auth is broken unless RECENT ACTIVITY shows a fresh failure.")
+        if ch == "console":
+            return "Delivery channel is console: nothing is actually being sent to a human yet."
+        if ch == "telegram":
+            tok = env("BEADLE_TELEGRAM_TOKEN") or env("TELEGRAM_TOKEN")
+            if not tok:
+                return "Delivery is MISCONFIGURED: channel is telegram but no token is set."
+            u = (http_json("https://api.telegram.org/bot%s/getMe" % tok).get("result") or {}).get("username")
+            return healthy % ("telegram, bot @%s reachable" % u)
+        if ch == "slack":
+            # A webhook cannot be probed without posting, so report configuration, not liveness.
+            return ("Delivery channel is slack and a webhook IS configured."
+                    if (env("SLACK_WEBHOOK_URL") or env("BEADLE_SLACK_WEBHOOK_URL"))
+                    else "Delivery is MISCONFIGURED: channel is slack but no webhook is set.")
+        return "Delivery channel is %s; not probed." % ch
+    facts.append(probe(_delivery, "Delivery is FAILING right now: the channel did not answer."))
+
+    def _claims():
+        rows, due = claims_due(emp, after_hours=0)
+        if not rows:
+            return ("This employee has made 0 claims, so it has NO measured action rate yet. Do not "
+                    "describe its work as effective or ignored; there is no evidence either way.")
+        checked = [r for r in rows if r.get("outcome") is not None]
+        acted = [r for r in checked if r.get("outcome") not in (None, "still_open", "ignored")]
+        rate = "%d%%" % round(100 * len(acted) / len(checked)) if checked else "not yet measured"
+        return ("Claims RIGHT NOW: %d total, %d awaiting reconcile, %d checked, action rate %s. Use "
+                "THIS as the action rate and correct any memory item claiming a different one."
+                % (len(rows), len(rows) - len(checked), len(checked), rate))
+    facts.append(probe(_claims))
+
+    def _self():
+        p = os.path.join(emp_dir(emp), "journal.jsonl")
+        if not os.path.exists(p):
+            return "This employee has never journalled a run."
+        last = {}
+        for ln in open(p):
+            try:
+                r = json.loads(ln)
+            except Exception:
+                continue
+            last[r.get("task", "?")] = r
+        broken = [t for t, r in last.items() if failed(str(r.get("summary", "")))
+                  or "skipped" in str(r.get("summary", ""))[:9].lower()]
+        if broken:
+            return ("These tasks are BROKEN on their most recent run: %s. This is an outage of the "
+                    "employee itself, not a quiet period. Open a thread for it and do not report "
+                    "the employee as healthy." % ", ".join(sorted(broken)))
+        return ("Every task's most recent run produced real output (%s). DROP any memory thread "
+                "claiming a task is persistently failing." % ", ".join(sorted(last)))
+    facts.append(probe(_self))
+
+    return facts
+
+
+def ground_facts(emp):
+    """default_facts plus whatever employees/<emp>/facts.py adds.
+
+    Convention: that file defines `facts()` returning a list of plain strings. Employee-specific
+    truth is the whole point — the generic probes cannot know that this employee's memory keeps
+    inventing a PR count or a queue depth.
+
+    Phrase a fact as an INSTRUCTION, not a datum. "Open PRs: 2" invites the model to keep its
+    own number alongside yours; "Open PRs RIGHT NOW: 2. Correct any memory item claiming a
+    different count" is what actually overwrites the drift.
+    """
+    out = default_facts(emp)
+    path = os.path.join(emp_dir(emp), "facts.py")
+    if os.path.exists(path):
+        def _load():
+            spec = importlib.util.spec_from_file_location("facts_%s" % _slug(emp), path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return list(mod.facts())
+        got = probe(_load, None)
+        out.extend(got if isinstance(got, list) else ["employee facts.py failed: %s" % got])
+    return "\n".join("- " + str(f) for f in out)
+
+
+def consolidate(emp, facts=None):
     """Re-curate memory.md from the journal. Run it weekly, not every task.
 
-    `facts` is deterministic live ground truth — pass anything you can check cheaply (open PR
-    count, current queue depth, whether delivery is healthy). Memory drifts, and the fix is to
-    hand it something authoritative to correct itself against, not a better prompt.
+    `facts` is deterministic live ground truth. Left as None it calls ground_facts(emp), which
+    is what you want: memory drifts, and the fix is to hand it something authoritative to
+    correct itself against, not a better prompt. Pass a string to override, or "" for none.
     """
+    if facts is None:
+        facts = ground_facts(emp)
     p = ("You maintain an autonomous employee's CURATED MEMORY. Given VERIFIED FACTS (live "
          "ground truth), CURRENT MEMORY and RECENT ACTIVITY, output the UPDATED memory markdown.\n"
          "Keep the same section headers that already appear in CURRENT MEMORY.\n"
