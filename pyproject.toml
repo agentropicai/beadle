@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "beadle"
-version = "0.2.0"
+version = "0.2.1"
 description = "Build an AI employee without building an agent platform — deterministic checks, one-shot judgment, and a gate that keeps the model out of the loop on quiet days."
 readme = "PYPI.md"
 requires-python = ">=3.9"
