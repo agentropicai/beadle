@@ -61,8 +61,9 @@ Measured on the production fleet this was extracted from — 21 live tasks, 5 em
 Three things follow, and they are the whole argument:
 
 - **Cost.** A check with nothing to report costs nothing. There is no per-agent budget to
-  govern because there is no runaway spend to govern. `llm()` shells out to `claude -p`, so it
-  bills against a Claude subscription rather than per-token API credit.
+  govern because there is no runaway spend to govern. `llm()` shells out to a logged-in Claude
+  Code or Codex CLI, strips model API credentials from that subprocess, and needs no API key or
+  per-token billing integration.
 - **Reliability.** Every model call in a chain is a die roll. Ten steps at 90% is 35%. Beadle
   chains are one step long.
 - **Debuggability.** When a deterministic task misbehaves you read the SQL. There is no
@@ -159,8 +160,10 @@ none of those are the hard part.
 
 ## Requirements
 
-Python 3.9+ and the [Claude Code CLI](https://claude.com/claude-code) (`claude login`). That is
-all — the example employee runs with no database, no API key, and no messaging setup.
+Python 3.9+ and one logged-in CLI: [Claude Code](https://claude.com/claude-code)
+(`claude auth login`) or [Codex](https://developers.openai.com/codex/noninteractive)
+(`codex login`). Set `BEADLE_LLM_PROVIDER=claude|codex`; optionally set the other provider as
+`BEADLE_LLM_FALLBACK`. The example employee needs no database, API key, or messaging setup.
 
 ## Docs
 

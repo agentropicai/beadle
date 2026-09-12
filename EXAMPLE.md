@@ -74,7 +74,7 @@ $ echo "--- DATA ---" >> /tmp/p.txt
 $ curl -s 'https://hn.algolia.com/api/v1/search?query=AI+agents&tags=story&hitsPerPage=5' \
     | jq -r '.hits[] | "- \(.title) — \(.points) points, \(.num_comments) comments"' >> /tmp/p.txt
 $ echo "Is any of this worth my attention today? REAL or SKIP on the first line." >> /tmp/p.txt
-$ claude -p --tools "" < /tmp/p.txt
+$ python3 -c 'import lib,sys; print(lib.llm(sys.stdin.read()))' < /tmp/p.txt
 ```
 
 You have now tested the entire product for free. **This is where you usually discover the mandate

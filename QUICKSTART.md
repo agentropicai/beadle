@@ -2,8 +2,17 @@
 
 Follow this straight through. Budget: **90 minutes** to something running on a schedule.
 
-You need Python 3.9+ and the [Claude Code CLI](https://claude.com/claude-code), logged in.
-Nothing else — no database, no API key, no Telegram.
+You need Python 3.9+ and either the [Claude Code CLI](https://claude.com/claude-code) or
+[Codex CLI](https://developers.openai.com/codex/noninteractive), logged in. Nothing else — no
+database, no API key, no Telegram. Claude is the backward-compatible default; to use Codex:
+
+```bash
+echo 'BEADLE_LLM_PROVIDER=codex' >> .env
+codex login
+```
+
+To keep the other subscription login as quota/auth fallback, also set
+`BEADLE_LLM_FALLBACK=claude` (or `codex` when Claude is primary).
 
 Want to see it done before you do it yourself? [EXAMPLE.md](EXAMPLE.md) is a real transcript of
 building one employee end to end, bug included.
@@ -108,7 +117,8 @@ Spend the time on two sections:
 Paste real data into a terminal and run the judgment by hand:
 
 ```bash
-claude -p --tools "" < /tmp/my-prompt.txt
+# Use the configured provider through the same no-tools wrapper the employee will call.
+python3 -c 'import lib,sys; print(lib.llm(sys.stdin.read()))' < /tmp/my-prompt.txt
 ```
 
 where the file is your `role.md` followed by the data and the question you want answered.

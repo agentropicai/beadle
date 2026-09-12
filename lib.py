@@ -10,7 +10,7 @@ The one rule the rest of the design follows from:
 So there is no agent loop in here. `llm()` is one subprocess call with tools disabled and
 max-turns 1. If you find yourself wanting to give it tools, you want a different repo.
 """
-import os, sys, subprocess, json, datetime, re, html, shutil, urllib.request, urllib.parse, importlib.util
+import os, sys, subprocess, json, datetime, re, html, shutil, tempfile, urllib.request, urllib.parse, importlib.util
 
 # Where the workspace lives. Defaults to this file's directory, which is what you want when lib.py
 # sits in the workspace you cloned. Set BEADLE_HOME when it does not: `pip install beadle` ships
@@ -51,46 +51,176 @@ def env(key, default=None):
 # JUDGE — the only place a model is allowed to appear
 # --------------------------------------------------------------------------------------
 
-def llm(prompt, model=None, timeout=180):
-    """One-shot judgment. No tools, no loop, no retries.
+PROVIDERS = ("claude", "codex")
 
-    Runs `claude -p` so it bills against your Claude subscription rather than per-token API
-    credit. That is deliberate: it is why this architecture needs no budget governance.
 
-    Returns the model's text, or a string starting with "LLM_ERROR:" — never raises. Callers
-    MUST check for LLM_ERROR before delivering anything. A task that delivers an error string
-    to your team is worse than a task that stays silent.
+def llm_providers():
+    """Configured subscription-backed CLI providers, primary first.
+
+    BEADLE_LLM_PROVIDER chooses the primary. BEADLE_LLM_FALLBACK is optional and is only
+    attempted when the primary returns an actual CLI/auth/quota error. No API credentials are
+    read or used by this harness.
     """
-    model = model or env("BEADLE_MODEL", "claude-sonnet-4-6")
-    # Resolve the binary rather than trusting PATH. cron runs with a near-empty PATH that does not
-    # include ~/.local/bin, which is where the CLI installs, so a task that works by hand fails on
-    # every scheduled run with "claude CLI not found". That killed a live fleet for eight days
-    # while every other part of it reported healthy. BEADLE_CLAUDE_BIN overrides.
-    cli = env("BEADLE_CLAUDE_BIN") or shutil.which("claude") or "claude"
+    primary = (env("BEADLE_LLM_PROVIDER", "claude") or "claude").strip().lower()
+    fallback = (env("BEADLE_LLM_FALLBACK", "") or "").strip().lower()
+    names = [primary] + ([fallback] if fallback else [])
+    bad = [name for name in names if name not in PROVIDERS]
+    if bad:
+        raise ValueError("unsupported BEADLE LLM provider: %s (choose claude or codex)" % bad[0])
+    return list(dict.fromkeys(names))
+
+
+def llm_provider():
+    """The configured primary provider."""
+    return llm_providers()[0]
+
+
+def _provider_model(provider, requested=None):
+    """Resolve a model without leaking a vendor-specific model name into the other CLI."""
+    specific = env("BEADLE_%s_MODEL" % provider.upper())
+    candidate = specific or requested or env("BEADLE_MODEL")
+    if candidate:
+        low = candidate.lower()
+        if provider == "codex" and (low.startswith("claude") or low in ("opus", "sonnet", "haiku")):
+            candidate = None
+        elif provider == "claude" and low.startswith(("gpt-", "o1", "o3", "o4", "codex")):
+            candidate = None
+    if provider == "claude":
+        return candidate or "claude-sonnet-4-6"
+    # An omitted Codex model deliberately uses the model included with the logged-in account.
+    return candidate
+
+
+def _provider_cli(provider):
+    key = "BEADLE_%s_BIN" % provider.upper()
+    return env(key) or shutil.which(provider) or provider
+
+
+def subscription_env(provider, base=None):
+    """Environment for a subscription login, with API/provider overrides removed.
+
+    Both CLIs prefer some environment credentials over their saved interactive login. Removing
+    those variables here makes the no-API contract executable rather than merely documented.
+    The login stores themselves (Claude config and CODEX_HOME) remain available.
+    """
+    if provider not in PROVIDERS:
+        raise ValueError("provider must be claude or codex")
+    clean = dict(base if base is not None else os.environ)
+    if provider == "claude":
+        for key in ("ANTHROPIC_API_KEY", "CLAUDE_CODE_USE_BEDROCK",
+                    "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"):
+            clean.pop(key, None)
+    else:
+        clean.pop("OPENAI_API_KEY", None)
+    return clean
+
+
+def _short_error(provider, r, stdout=None):
+    out = (stdout if stdout is not None else r.stdout or "").strip()
+    detail = out or (r.stderr or "").strip() or "no output"
+    return "LLM_ERROR: %s: %s" % (provider, detail[:300])
+
+
+def _looks_like_cli_error(text):
+    low = (text or "").strip().lower()
+    return len(low) < 500 and any(s in low for s in (
+        "invalid api key", "authentication_error", "credit balance", "usage limit",
+        "weekly limit", "rate limit", "organization has disabled", "oauth token",
+        "please run /login", "please run `claude`", "not logged in", "login required",
+        "you've hit your", "you have hit your",
+    ))
+
+
+def _claude(prompt, model, timeout):
+    cli = _provider_cli("claude")
     try:
         r = subprocess.run(
-            [cli, "-p", "--model", model, "--max-turns", "1", "--tools", ""],
+            [cli, "-p", "--model", model, "--max-turns", "1", "--tools", "",
+             "--output-format", "json"],
             input=prompt, capture_output=True, text=True, errors="replace", timeout=timeout,
+            env=subscription_env("claude"),
         )
     except FileNotFoundError:
-        return ("LLM_ERROR: `claude` CLI not found at %r. Install it and run `claude login`, or set "
-                "BEADLE_CLAUDE_BIN to its absolute path. If this only happens on scheduled runs, "
-                "cron's PATH is the cause: re-run `./beadle schedule` to pin the absolute path." % cli)
+        return ("LLM_ERROR: claude: CLI not found at %r. Install it and run `claude auth login`, or "
+                "set BEADLE_CLAUDE_BIN." % cli)
     except subprocess.TimeoutExpired:
-        return "LLM_ERROR: timed out after %ss" % timeout
+        return "LLM_ERROR: claude: timed out after %ss" % timeout
+
+    raw = (r.stdout or "").strip()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        if r.returncode != 0 or not raw or _looks_like_cli_error(raw):
+            return _short_error("claude", r, raw)
+        return raw
+    if isinstance(data, dict) and "result" in data:
+        out = str(data.get("result") or "").strip()
+        if (r.returncode != 0 or data.get("is_error") or data.get("api_error_status") is not None
+                or data.get("subtype") not in (None, "success") or _looks_like_cli_error(out)):
+            return _short_error("claude", r, out)
+        return out or _short_error("claude", r, "empty result")
+    if r.returncode != 0 or not raw:
+        return _short_error("claude", r, raw)
+    return raw
+
+
+def _codex(prompt, model, timeout):
+    cli = _provider_cli("codex")
+    cmd = [cli, "exec", "--ephemeral", "--ignore-user-config",
+           "-c", 'forced_login_method="chatgpt"', "-c", 'approval_policy="never"',
+           "-c", "tools.web_search=false", "-c", "tools.view_image=false",
+           "--disable", "shell_tool", "--disable", "unified_exec", "--ignore-rules",
+           "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never"]
+    if model:
+        cmd += ["--model", model]
+    cmd.append("-")
+    # Keep the judge in an empty, read-only workspace. Even though Codex is an agentic CLI, it has
+    # no repo or credentials to inspect here; the prompt is the complete input to this judgment.
+    try:
+        with tempfile.TemporaryDirectory(prefix="beadle-judge-") as workdir:
+            r = subprocess.run(cmd, input=prompt, cwd=workdir, capture_output=True, text=True,
+                               errors="replace", timeout=timeout, env=subscription_env("codex"))
+    except FileNotFoundError:
+        return ("LLM_ERROR: codex: CLI not found at %r. Install it and run `codex login`, or set "
+                "BEADLE_CODEX_BIN." % cli)
+    except subprocess.TimeoutExpired:
+        return "LLM_ERROR: codex: timed out after %ss" % timeout
 
     out = (r.stdout or "").strip()
-    low = out.lower()
-    # Auth/quota failures come back on stdout looking like a normal short answer. Only treat
-    # them as failures when the *whole* output is that message — a real answer can legitimately
-    # discuss an auth error (an SRE employee triaging a 401, say) without being one.
-    authfail = len(out) < 300 and any(s in low for s in (
-        "invalid api key", "authentication_error", "credit balance", "usage limit",
-        "organization has disabled", "oauth token", "please run /login",
-    ))
-    if not out or out.startswith("Error:") or authfail:
-        return "LLM_ERROR: " + (out or (r.stderr or "").strip())[:300]
+    if r.returncode != 0 or not out or _looks_like_cli_error(out):
+        return _short_error("codex", r, out)
     return out
+
+
+def llm(prompt, model=None, timeout=180, provider=None):
+    """One-shot judgment through a logged-in Claude or Codex CLI.
+
+    The primary provider comes from BEADLE_LLM_PROVIDER. Set BEADLE_LLM_FALLBACK to the other
+    provider for quota/auth failover. `model` remains backward compatible: a Claude model is
+    ignored when Codex is active and vice versa; provider-specific environment settings win.
+
+    Returns the model's text, or a string starting with "LLM_ERROR:" — never raises for CLI
+    failures. Callers MUST check it before delivery.
+    """
+    try:
+        providers = [provider.strip().lower()] if provider else llm_providers()
+        if any(name not in PROVIDERS for name in providers):
+            raise ValueError("provider must be claude or codex")
+    except (AttributeError, ValueError) as exc:
+        return "LLM_ERROR: configuration: %s" % exc
+
+    errors = []
+    for index, name in enumerate(providers):
+        selected_model = _provider_model(name, model)
+        result = (_claude(prompt, selected_model, timeout) if name == "claude"
+                  else _codex(prompt, selected_model, timeout))
+        if not failed(result):
+            if index:
+                print("beadle: %s failed; judgment completed with %s fallback" %
+                      (providers[0], name), file=sys.stderr)
+            return result
+        errors.append(result[len("LLM_ERROR: "):])
+    return "LLM_ERROR: " + " | fallback: ".join(errors)
 
 
 def failed(text):

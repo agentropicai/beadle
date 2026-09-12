@@ -83,6 +83,9 @@ own `facts.py`, which adds to the four `default_facts()` every employee already 
   seen-state) is gitignored and written by tasks. Never hand-edit it.
 - Config comes from `.env` via `lib.env()` with a `BEADLE_` prefix. Document any new key in
   `.env.example`.
+- Model access is provider-neutral and subscription-backed. `BEADLE_LLM_PROVIDER` selects
+  `claude` or `codex`; `BEADLE_LLM_FALLBACK` may name the other. Keep both paths behind
+  `lib.llm()` and preserve its `LLM_ERROR:` contract. Never add an API-key dependency.
 - `lib.git_commit()` is off unless `BEADLE_GIT_COMMIT=1` — on a checkout someone is editing, it
   would sweep their work into a commit.
 

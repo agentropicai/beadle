@@ -20,7 +20,7 @@ Every task is the same five steps:
 ```
 GATHER   deterministic — SQL, an API call, a shell command. No model.
 GATE     plain Python. Did anything happen? If not, stop here — silently.
-JUDGE    one model call. Tools disabled, max-turns 1.
+JUDGE    one isolated model call. It sees only the prompt produced by GATHER.
 DELIVER  gated. Silence is the correct output most days.
 RECORD   journal, archive.
 ```
@@ -28,6 +28,10 @@ RECORD   journal, archive.
 There is no agent loop. On the production fleet this was extracted from — 21 live tasks —
 10 never call a model at all, 18 can exit before the model is invoked, and the busiest task runs
 144 times a day for zero tokens.
+
+The judge uses a logged-in Claude Code or Codex CLI subscription, selected with
+`BEADLE_LLM_PROVIDER=claude|codex`; an optional `BEADLE_LLM_FALLBACK` can use the other login on
+auth or quota failure. No model API key is required.
 
 Beadle is a workspace you own and edit. `beadle init` fetches it and gets out of the way. Full
 docs, four working example employees, and a complete worked build (including the bug hit along

@@ -11,7 +11,7 @@ starter workspace into a directory and then gets out of your way.
 Everything after that is documented in the workspace itself — README.md, QUICKSTART.md and
 EXAMPLE.md. Source: https://github.com/agentropicai/beadle
 """
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 import os
 import shutil

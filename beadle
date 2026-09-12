@@ -162,12 +162,20 @@ def cmd_schedule(args):
     py = sys.executable
     unit = "beadle-%s-%s" % (emp, task)
     marker = "# beadle:%s/%s" % (emp, task)
-    # Pin the CLI's absolute path into the cron line. cron does not get your shell's PATH, and the
-    # claude CLI lives in ~/.local/bin, so a task verified by hand otherwise fails on every
-    # scheduled run with "claude CLI not found" while the employee still looks scheduled and
-    # healthy. Pinning python without pinning the CLI is half a fix.
-    cli = shutil.which("claude")
-    prefix = "BEADLE_CLAUDE_BIN=%s " % cli if cli else ""
+    # Pin every configured provider CLI into the cron line. cron does not get your shell's PATH,
+    # and both CLIs are commonly installed outside /usr/bin. Pin the fallback too: discovering
+    # that failover cannot find its binary is exactly when it is least useful.
+    pinned = []
+    try:
+        providers = lib.llm_providers()
+    except ValueError as exc:
+        die(str(exc))
+    for provider in providers:
+        configured = lib.env("BEADLE_%s_BIN" % provider.upper())
+        cli = shutil.which(configured) if configured else shutil.which(provider)
+        if cli:
+            pinned.append("BEADLE_%s_BIN=%s" % (provider.upper(), cli))
+    prefix = (" ".join(pinned) + " ") if pinned else ""
     line = "%s cd %s && %s%s %s >> %s/logs/cron.log 2>&1  %s" % (expr, BASE, prefix, py, path, BASE, marker)
 
     if "--print" not in args:
@@ -273,11 +281,23 @@ def cmd_doctor(args):
         print("  %s %-34s %s" % (mark, label, detail))
 
     print("\n%sBeadle doctor%s\n" % (BOLD, OFF))
-    claude = shutil.which("claude")
-    check("claude CLI on PATH", bool(claude), claude or "install it, then `claude login`")
-    if claude:
+    try:
+        providers = lib.llm_providers()
+        check("LLM providers", True, " -> ".join(providers))
+    except ValueError as exc:
+        providers = []
+        check("LLM providers", False, str(exc))
+    available = []
+    for provider in providers:
+        configured = lib.env("BEADLE_%s_BIN" % provider.upper())
+        cli = shutil.which(configured) if configured else shutil.which(provider)
+        available.append(bool(cli))
+        check("%s CLI on PATH" % provider, bool(cli),
+              cli or ("install it, then `claude auth login`" if provider == "claude"
+                      else "install it, then `codex login`"))
+    if providers and all(available):
         probe = lib.llm("Reply with exactly: OK", timeout=60)
-        check("claude answers", not lib.failed(probe), probe[:70])
+        check("%s answers" % providers[0], not lib.failed(probe), probe[:70])
     check(".env present", os.path.exists(os.path.join(BASE, ".env")),
           "optional — console delivery works without it", required=False)
     chan = lib.env("BEADLE_CHANNEL", "console")
